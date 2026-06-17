@@ -1,0 +1,37 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build
+/.next/
+/out/
+/build
+
+# Local data
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Debug
+npm-debug.log*
+.DS_Store
+*.pem
+
+# Typescript
+next-env.d.ts
+*.tsbuildinfo
+
+# Vercel
+.vercel
