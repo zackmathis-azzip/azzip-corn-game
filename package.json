@@ -10,6 +10,7 @@
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@vercel/speed-insights": "^2.0.0",
     "better-sqlite3": "^12.11.1",
     "libphonenumber-js": "^1.13.6",
     "next": "15.5.19",
