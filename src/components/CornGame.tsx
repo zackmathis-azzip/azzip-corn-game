@@ -28,15 +28,19 @@ export function CornGame({ turnstileSiteKey }: Props) {
   const [claimedIds, setClaimedIds] = useState<Set<string>>(new Set());
   const [playerStatus, setPlayerStatus] = useState<string | null>(null);
   const [prizesRemaining, setPrizesRemaining] = useState<number | null>(null);
+  const [devAllowReplay, setDevAllowReplay] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [bootLoading, setBootLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const mustCompleteWin = playerStatus === "winner_pending";
   const hasPlayed =
-    playerStatus === "finished" ||
-    playerStatus === "winner_pending" ||
-    playerStatus === "winner_claimed";
+    !devAllowReplay &&
+    (playerStatus === "finished" ||
+      playerStatus === "winner_pending" ||
+      playerStatus === "winner_claimed");
+  const playBlocked = mustCompleteWin || hasPlayed;
 
   const refreshState = useCallback(async (campaignId: string, full = false) => {
     const url = full
@@ -51,6 +55,9 @@ export function CornGame({ turnstileSiteKey }: Props) {
     setPlayerStatus(data.playerStatus);
     if (typeof data.prizesRemaining === "number") {
       setPrizesRemaining(data.prizesRemaining);
+    }
+    if (typeof data.devAllowReplay === "boolean") {
+      setDevAllowReplay(data.devAllowReplay);
     }
 
     if (full && data.kernels) {
@@ -94,7 +101,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
   }, [campaign, refreshState]);
 
   async function handleKernelClick(kernelId: string) {
-    if (hasPlayed || loadingId) return;
+    if (playBlocked || loadingId) return;
 
     setLoadingId(kernelId);
     setError(null);
@@ -113,6 +120,8 @@ export function CornGame({ turnstileSiteKey }: Props) {
             body: data.message ?? "You have already played.",
           });
           setPlayerStatus("finished");
+        } else if (data.error === "complete_pending_win") {
+          setError(data.message ?? "Complete your prize claim before playing again.");
         } else if (data.error === "kernel_taken") {
           setError(data.message ?? "That kernel was just taken.");
           if (campaign) await refreshState(campaign.id, false);
@@ -132,7 +141,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
           prizeLabel: data.prizeLabel ?? "A prize",
         });
       } else {
-        setPlayerStatus("finished");
+        setPlayerStatus(devAllowReplay ? "new" : "finished");
         setModal({ type: "lose" });
       }
 
@@ -178,6 +187,11 @@ export function CornGame({ turnstileSiteKey }: Props) {
             remain!
           </p>
         )}
+        {devAllowReplay && (
+          <p className="dev-mode-banner" role="status">
+            Dev mode: unlimited test plays enabled
+          </p>
+        )}
         {hasPlayed && playerStatus !== "winner_pending" && (
           <p className="played-banner" role="status">
             Thanks for playing!
@@ -193,7 +207,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
       <CornGrid
         kernels={kernels}
         claimedIds={claimedIds}
-        disabled={hasPlayed || campaign.status !== "active"}
+        disabled={mustCompleteWin || campaign.status !== "active"}
         loadingId={loadingId}
         onKernelClick={handleKernelClick}
       />

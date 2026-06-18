@@ -13,7 +13,8 @@ import {
   type PlayerRow,
   type PrizeRow,
 } from "./db";
-import { normalizeEmail, notifyWinner } from "./email";
+import { devAllowReplay } from "./config";
+import { normalizeEmail, sendWinnerConfirmationEmail } from "./email";
 import { normalizePhone } from "./phone";
 
 export type ClaimResult =
@@ -75,12 +76,21 @@ export async function claimKernel(params: {
   }
 
   const player = await getOrCreatePlayer(params.sessionToken, campaign.id);
+  const devReplay = devAllowReplay();
 
-  if (player.status !== "new") {
+  if (!devReplay && player.status !== "new") {
     return {
       ok: false,
       error: "already_played",
       message: "You have already played. One play per person.",
+    };
+  }
+
+  if (devReplay && player.status === "winner_pending") {
+    return {
+      ok: false,
+      error: "complete_pending_win",
+      message: "Complete your prize claim before playing again.",
     };
   }
 
@@ -194,6 +204,13 @@ export async function claimKernel(params: {
     };
   }
 
+  if (devReplay) {
+    await sqlRun(
+      `UPDATE players SET status = 'new', first_click_at = NULL, pending_claim_id = NULL WHERE id = ?`,
+      [player.id]
+    );
+  }
+
   return { ok: true, outcome: "lose", claimId };
 }
 
@@ -248,32 +265,38 @@ export async function completeClaim(params: {
     [emailNorm, params.claimId]
   );
 
-  if (dupEmail) {
-    return {
-      ok: false,
-      error: "duplicate_identity",
-      message: "This email has already won a prize in this promotion.",
-    };
-  }
-
   const dupPhone = await sqlGet<{ id: string }>(
     `SELECT id FROM claims
      WHERE phone_e164 = ? AND outcome = 'win' AND status = 'completed' AND id != ?`,
     [phoneE164, params.claimId]
   );
 
-  if (dupPhone) {
-    return {
-      ok: false,
-      error: "duplicate_identity",
-      message: "This phone number has already won a prize in this promotion.",
-    };
+  if (!devAllowReplay()) {
+    if (dupEmail) {
+      return {
+        ok: false,
+        error: "duplicate_identity",
+        message: "This email has already won a prize in this promotion.",
+      };
+    }
+
+    if (dupPhone) {
+      return {
+        ok: false,
+        error: "duplicate_identity",
+        message: "This phone number has already won a prize in this promotion.",
+      };
+    }
   }
 
   const now = new Date().toISOString();
   const prize = claim.prize_id
     ? await sqlGet<PrizeRow>(`SELECT * FROM prizes WHERE id = ?`, [claim.prize_id])
     : null;
+  const campaign = await sqlGet<{ ends_at: string }>(
+    `SELECT ends_at FROM campaigns WHERE id = ?`,
+    [claim.campaign_id]
+  );
 
   await sqlRun(
     `UPDATE claims SET
@@ -283,18 +306,26 @@ export async function completeClaim(params: {
     [emailNorm, phoneE164, emailNorm, phoneE164, now, params.claimId]
   );
 
-  await sqlRun(
-    `UPDATE players SET status = 'winner_claimed', pending_claim_id = NULL WHERE id = ?`,
-    [player.id]
-  );
+  if (devAllowReplay()) {
+    await sqlRun(
+      `UPDATE players SET status = 'new', first_click_at = NULL, pending_claim_id = NULL WHERE id = ?`,
+      [player.id]
+    );
+  } else {
+    await sqlRun(
+      `UPDATE players SET status = 'winner_claimed', pending_claim_id = NULL WHERE id = ?`,
+      [player.id]
+    );
+  }
 
   await auditLog("claim_complete", claim.campaign_id, player.id, { claimId: params.claimId });
 
   if (prize) {
-    notifyWinner({
+    sendWinnerConfirmationEmail({
+      toEmail: emailNorm,
+      phoneE164,
       prizeLabel: prize.label,
-      kernelId: claim.kernel_id,
-      claimId: params.claimId,
+      promotionEndsAt: campaign?.ends_at ?? new Date().toISOString(),
     })
       .then(() =>
         sqlRun(`UPDATE claims SET notified_at = ? WHERE id = ?`, [

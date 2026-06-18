@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sqlGet } from "@/lib/db";
 import { getKernelState, getPlayerState, getKernelsForCampaign, getRemainingPrizeCount } from "@/lib/game";
+import { devAllowReplay } from "@/lib/config";
 import { getSessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     playerStatus: player?.status ?? null,
     pendingClaimId: player?.pending_claim_id ?? null,
     prizesRemaining,
+    devAllowReplay: devAllowReplay(),
     kernels,
   });
 }

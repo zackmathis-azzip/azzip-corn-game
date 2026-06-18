@@ -62,6 +62,16 @@ a {
   color: var(--azzip-yellow);
 }
 
+.dev-mode-banner {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: rgba(45, 90, 39, 0.35);
+  border: 1px dashed var(--azzip-green);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #b8e0b3;
+}
+
 .error-banner {
   margin-top: 0.75rem;
   padding: 0.5rem 1rem;
@@ -87,13 +97,57 @@ a {
   --grid-h: calc(var(--rows) * var(--kh));
 }
 
+.corn-canvas {
+  position: relative;
+  width: var(--grid-w);
+  height: var(--grid-h);
+}
+
+.corn-sponsors {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5%;
+  padding: 4% 6%;
+  pointer-events: none;
+}
+
+.corn-sponsor-logo {
+  width: 36%;
+  max-height: 72%;
+  object-fit: contain;
+  opacity: 0.24;
+  filter: saturate(0.9);
+}
+
+.corn-sponsor-logo--azzip {
+  object-position: left center;
+}
+
+.corn-sponsor-logo--old-major {
+  object-position: right center;
+}
+
+.corn-sponsor-x {
+  flex: 0 0 auto;
+  font-size: clamp(2.5rem, 9vw, 5.5rem);
+  font-weight: 800;
+  line-height: 1;
+  color: rgba(255, 219, 0, 0.38);
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
 .corn-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--kw));
   grid-template-rows: repeat(var(--rows), var(--kh));
   width: var(--grid-w);
   height: var(--grid-h);
-  transform-origin: top center;
 }
 
 @media (orientation: landscape), (min-width: 900px) {
@@ -107,25 +161,35 @@ a {
     height: calc(var(--grid-h) * var(--desktop-scale));
   }
 
-  .corn-grid {
+  .corn-canvas {
     transform: scale(var(--desktop-scale));
+    transform-origin: top center;
   }
 }
 
 @media (orientation: portrait) and (max-width: 899px) {
+  .play-shell {
+    gap: 0.5rem;
+  }
+
   .corn-stage {
     --mobile-scale: min(
       calc(92vw / var(--grid-h)),
       calc((100dvh - 200px) / var(--grid-w))
     );
+    flex: 0 0 auto;
+    position: relative;
     width: calc(var(--grid-h) * var(--mobile-scale));
     height: calc(var(--grid-w) * var(--mobile-scale));
-    align-items: center;
+    margin-inline: auto;
   }
 
-  .corn-grid {
+  .corn-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
     transform-origin: center center;
-    transform: rotate(90deg) scale(var(--mobile-scale));
+    transform: translate(-50%, -50%) rotate(90deg) scale(var(--mobile-scale));
   }
 }
 

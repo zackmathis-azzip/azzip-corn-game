@@ -7,3 +7,8 @@ export function normalizePhone(phone: string): string | null {
   if (!parsed?.isValid()) return null;
   return parsed.format("E.164");
 }
+
+export function formatPhoneForDisplay(phoneE164: string): string {
+  const parsed = parsePhoneNumberFromString(phoneE164, "US");
+  return parsed?.formatNational() ?? phoneE164;
+}

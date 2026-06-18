@@ -26,3 +26,13 @@ export const ADMIN_COOKIE = "admin_auth";
 
 export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_MAX_REQUESTS = 30;
+
+export const SPONSOR_AZZIP_LOGO_URL =
+  "https://azzippizza.com/wp-content/themes/azzip/assets/img/logo-alt.svg";
+export const SPONSOR_OLD_MAJOR_LOGO_URL =
+  "https://oldmajormarket.com/wp-content/uploads/2026/02/Old-Major-Official2019.png";
+
+/** Server-only: allow unlimited plays per session for QA (never enable in production). */
+export function devAllowReplay(): boolean {
+  return process.env.DEV_ALLOW_REPLAY === "true";
+}
