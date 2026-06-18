@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     );
   }
 
-  const result = claimKernel({ kernelId, sessionToken, ip, userAgent });
+  const result = await claimKernel({ kernelId, sessionToken, ip, userAgent });
 
   const response = NextResponse.json(
     result.ok

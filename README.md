@@ -1,6 +1,6 @@
 # Azzip Pizza Corn Kernel Game
 
-Server-authoritative instant-win promo microsite: a corn-on-the-cob kernel grid where 50 prizes are pre-assigned at seed time. Built with **Next.js 15**, **SQLite** (`better-sqlite3`), and **Tailwind CSS**.
+Server-authoritative instant-win promo microsite: a corn-on-the-cob kernel grid where 50 prizes are pre-assigned at seed time. Built with **Next.js 15**, **Turso** (libSQL) / local SQLite, and **Tailwind CSS**.
 
 ## Quick start
 
@@ -49,7 +49,9 @@ See [`.env.example`](.env.example) for the full list.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ADMIN_PASSWORD` | Yes (admin) | Protects `/admin` |
-| `DATABASE_PATH` | No | SQLite file path (default `./data/corn-game.db`) |
+| `TURSO_DATABASE_URL` | Yes (Vercel) | Turso libsql URL |
+| `TURSO_AUTH_TOKEN` | Yes (Vercel) | Turso auth token |
+| `DATABASE_PATH` | No | Local file DB when Turso unset |
 | `CAMPAIGN_STARTS_AT` / `CAMPAIGN_ENDS_AT` | No | Campaign window |
 | `FULFILLMENT_EMAIL` | No | Winner notifications (default `zack.mathis@azzippizza.com`) |
 | `RESEND_API_KEY` | No | Email notifications via Resend |
@@ -58,12 +60,9 @@ See [`.env.example`](.env.example) for the full list.
 ## Deploy to Vercel (`corn.azzippizza.com`)
 
 1. Create a new Vercel project from this directory.
-2. Set environment variables in Vercel (especially `ADMIN_PASSWORD`, `RESEND_API_KEY`, Turnstile keys).
-3. **SQLite on Vercel**: the default file-based DB is ephemeral on serverless. For production either:
-   - Mount persistent storage (Vercel doesn't support this natively), or
-   - Switch `DATABASE_PATH` to a hosted SQLite/Turso/libSQL volume, or
-   - Migrate to Postgres (Supabase/Neon).
-4. Run `npm run seed` once via a deploy hook or local script pointed at production DB.
+2. Set environment variables in Vercel (`ADMIN_PASSWORD`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, Turnstile keys).
+3. Create a [Turso](https://turso.tech) database and add credentials to Vercel (Storage → Create → Turso, or set env vars manually).
+4. Run `npm run seed` once against production (local with Turso env vars, or via `/admin` seed).
 5. Add DNS: `corn.azzippizza.com` → Vercel.
 6. Put Cloudflare in front for bot protection and Turnstile.
 
@@ -78,7 +77,6 @@ See [`.env.example`](.env.example) for the full list.
 ## Production gaps
 
 - Email/SMS verification before prize finalize
-- Persistent DB on serverless (Turso/Postgres)
 - Analytics (GA4/Plausible)
 - Legal review for IN/IL sweepstakes rules
 - Honeypot kernels / shadow-ban for bots

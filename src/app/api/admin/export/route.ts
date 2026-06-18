@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { sqlAll } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
@@ -12,7 +12,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const campaignId = url.searchParams.get("campaignId");
 
-  const db = getDb();
   let query = `
     SELECT c.id, c.kernel_id, c.outcome, c.email, c.phone,
            c.email_normalized, c.phone_e164, c.created_at, c.verified_at,
@@ -32,7 +31,7 @@ export async function GET(request: Request) {
 
   query += ` ORDER BY c.verified_at DESC`;
 
-  const rows = db.prepare(query).all(...params) as Array<Record<string, unknown>>;
+  const rows = await sqlAll<Record<string, unknown>>(query, params);
 
   const header = [
     "claim_id",

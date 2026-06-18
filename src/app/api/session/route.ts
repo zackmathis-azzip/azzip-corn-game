@@ -9,12 +9,13 @@ import {
 } from "@/lib/session";
 
 export async function GET() {
-  const campaign = getActiveCampaign();
+  const campaign = await getActiveCampaign();
   if (!campaign) {
     return NextResponse.json({ error: "no_campaign" }, { status: 404 });
   }
 
   let sessionToken = await getSessionToken();
+  const kernels = await getKernelsForCampaign(campaign.id);
   const response = NextResponse.json({
     campaign: {
       id: campaign.id,
@@ -24,7 +25,7 @@ export async function GET() {
       status: campaign.status,
       seed: campaign.seed,
     },
-    kernels: getKernelsForCampaign(campaign.id).map((k) => ({
+    kernels: kernels.map((k) => ({
       id: k.id,
       row: k.row,
       col: k.col,
@@ -32,7 +33,7 @@ export async function GET() {
       status: k.status,
       active: Boolean(k.active),
     })),
-    player: sessionToken ? getPlayerState(sessionToken) : null,
+    player: sessionToken ? await getPlayerState(sessionToken) : null,
   });
 
   if (!sessionToken) {

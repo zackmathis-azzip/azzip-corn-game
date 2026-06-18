@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = completeClaim({
+  const result = await completeClaim({
     claimId: body.claimId ?? "",
     sessionToken,
     email: body.email ?? "",

@@ -5,10 +5,10 @@ import { seedCampaign } from "@/lib/seed";
 export const runtime = "nodejs";
 
 export async function GET() {
-  let campaign = getActiveCampaign();
+  let campaign = await getActiveCampaign();
   if (!campaign) {
-    seedCampaign();
-    campaign = getActiveCampaign();
+    await seedCampaign();
+    campaign = await getActiveCampaign();
   }
 
   if (!campaign) {

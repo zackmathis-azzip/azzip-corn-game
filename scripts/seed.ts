@@ -1,8 +1,7 @@
-import { getDb } from "../src/lib/db";
+import { sqlRun } from "../src/lib/db";
 import { seedCampaign } from "../src/lib/seed";
 
-const db = getDb();
-db.prepare(`UPDATE campaigns SET status = 'archived' WHERE status = 'active'`).run();
+await sqlRun(`UPDATE campaigns SET status = 'archived' WHERE status = 'active'`);
 
-const id = seedCampaign();
+const id = await seedCampaign();
 console.log(`Seeded campaign: ${id}`);

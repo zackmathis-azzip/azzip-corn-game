@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { getKernelState, getKernelsForCampaign, getPlayerState } from "@/lib/game";
+import { sqlGet } from "@/lib/db";
+import { getKernelState, getPlayerState, getKernelsForCampaign } from "@/lib/game";
 import { getSessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -9,22 +9,21 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(request: NextRequest, { params }: Params) {
   const { id } = await params;
-  const db = getDb();
-  const campaign = db.prepare(`SELECT * FROM campaigns WHERE id = ?`).get(id);
+  const campaign = await sqlGet(`SELECT * FROM campaigns WHERE id = ?`, [id]);
 
   if (!campaign) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const state = getKernelState(id);
+  const state = await getKernelState(id);
   const sessionToken = await getSessionToken();
-  const player = sessionToken ? getPlayerState(sessionToken) : null;
+  const player = sessionToken ? await getPlayerState(sessionToken) : null;
 
   const url = new URL(request.url);
   const includeKernels = url.searchParams.get("kernels") !== "0";
 
   const kernels = includeKernels
-    ? getKernelsForCampaign(id).map((k) => ({
+    ? (await getKernelsForCampaign(id)).map((k) => ({
         id: k.id,
         row: k.row,
         col: k.col,

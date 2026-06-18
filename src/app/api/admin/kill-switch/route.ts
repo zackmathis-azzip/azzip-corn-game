@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, getActiveCampaign, auditLog } from "@/lib/db";
+import { auditLog, getActiveCampaign, sqlRun } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const campaign = getActiveCampaign();
+  const campaign = await getActiveCampaign();
   if (!campaign) {
     return NextResponse.json({ error: "No active campaign" }, { status: 404 });
   }
@@ -22,10 +22,8 @@ export async function POST(request: Request) {
   }
 
   const newStatus = body.paused === false ? "active" : "paused";
-  getDb()
-    .prepare(`UPDATE campaigns SET status = ? WHERE id = ?`)
-    .run(newStatus, campaign.id);
+  await sqlRun(`UPDATE campaigns SET status = ? WHERE id = ?`, [newStatus, campaign.id]);
 
-  auditLog("kill_switch", campaign.id, "admin", { status: newStatus });
+  await auditLog("kill_switch", campaign.id, "admin", { status: newStatus });
   return NextResponse.json({ success: true, status: newStatus });
 }

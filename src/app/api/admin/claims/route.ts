@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, auditLog } from "@/lib/db";
+import { auditLog, sqlGet, withTransaction } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
@@ -21,16 +21,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "claimId and void action required" }, { status: 400 });
   }
 
-  const db = getDb();
-  const claim = db.prepare(`SELECT * FROM claims WHERE id = ?`).get(body.claimId) as
-    | {
-        id: string;
-        campaign_id: string;
-        prize_id: string | null;
-        outcome: string;
-        status: string;
-      }
-    | undefined;
+  const claim = await sqlGet<{
+    id: string;
+    campaign_id: string;
+    prize_id: string | null;
+    outcome: string;
+    status: string;
+  }>(`SELECT * FROM claims WHERE id = ?`, [body.claimId]);
 
   if (!claim) {
     return NextResponse.json({ error: "Claim not found" }, { status: 404 });
@@ -40,19 +37,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, alreadyVoided: true });
   }
 
-  const tx = db.transaction(() => {
-    db.prepare(`UPDATE claims SET status = 'voided' WHERE id = ?`).run(body.claimId);
+  await withTransaction(async (tx) => {
+    await tx.run(`UPDATE claims SET status = 'voided' WHERE id = ?`, [body.claimId!]);
 
     if (claim.outcome === "win" && claim.prize_id) {
-      db.prepare(
-        `UPDATE prizes SET quantity_remaining = quantity_remaining + 1 WHERE id = ?`
-      ).run(claim.prize_id);
+      await tx.run(
+        `UPDATE prizes SET quantity_remaining = quantity_remaining + 1 WHERE id = ?`,
+        [claim.prize_id]
+      );
     }
   });
 
-  tx();
-
-  auditLog("void_claim", claim.campaign_id, "admin", { claimId: body.claimId });
+  await auditLog("void_claim", claim.campaign_id, "admin", { claimId: body.claimId });
 
   return NextResponse.json({ success: true });
 }

@@ -1,14 +1,13 @@
 import { randomUUID } from "crypto";
-import Database from "better-sqlite3";
-import path from "path";
+import { createClient, type Client, type InArgs } from "@libsql/client";
 import fs from "fs";
+import path from "path";
 
-const DB_PATH = process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "corn-game.db");
+let client: Client | null = null;
+let schemaReady: Promise<void> | null = null;
 
-let db: Database.Database | null = null;
-
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS campaigns (
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS campaigns (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   starts_at TEXT NOT NULL,
@@ -18,9 +17,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   total_kernels INTEGER NOT NULL,
   active_kernel_count INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS prizes (
+)`,
+  `CREATE TABLE IF NOT EXISTS prizes (
   id TEXT PRIMARY KEY,
   campaign_id TEXT NOT NULL,
   label TEXT NOT NULL,
@@ -28,9 +26,8 @@ CREATE TABLE IF NOT EXISTS prizes (
   quantity_total INTEGER NOT NULL,
   quantity_remaining INTEGER NOT NULL,
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
-);
-
-CREATE TABLE IF NOT EXISTS kernels (
+)`,
+  `CREATE TABLE IF NOT EXISTS kernels (
   id TEXT PRIMARY KEY,
   campaign_id TEXT NOT NULL,
   row INTEGER NOT NULL,
@@ -43,9 +40,8 @@ CREATE TABLE IF NOT EXISTS kernels (
   claimed_by_player_id TEXT,
   UNIQUE(campaign_id, row, col),
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
-);
-
-CREATE TABLE IF NOT EXISTS players (
+)`,
+  `CREATE TABLE IF NOT EXISTS players (
   id TEXT PRIMARY KEY,
   session_token TEXT NOT NULL UNIQUE,
   campaign_id TEXT NOT NULL,
@@ -54,9 +50,8 @@ CREATE TABLE IF NOT EXISTS players (
   pending_claim_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
-);
-
-CREATE TABLE IF NOT EXISTS claims (
+)`,
+  `CREATE TABLE IF NOT EXISTS claims (
   id TEXT PRIMARY KEY,
   campaign_id TEXT NOT NULL,
   kernel_id TEXT NOT NULL,
@@ -77,29 +72,24 @@ CREATE TABLE IF NOT EXISTS claims (
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
   FOREIGN KEY (kernel_id) REFERENCES kernels(id),
   FOREIGN KEY (player_id) REFERENCES players(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_claims_email_win
-  ON claims(email_normalized) WHERE outcome = 'win' AND status = 'completed';
-
-CREATE INDEX IF NOT EXISTS idx_claims_phone_win
-  ON claims(phone_e164) WHERE outcome = 'win' AND status = 'completed';
-
-CREATE INDEX IF NOT EXISTS idx_kernels_campaign_status
-  ON kernels(campaign_id, status);
-
-CREATE INDEX IF NOT EXISTS idx_players_session
-  ON players(session_token);
-
-CREATE TABLE IF NOT EXISTS audit_log (
+)`,
+  `CREATE INDEX IF NOT EXISTS idx_claims_email_win
+  ON claims(email_normalized) WHERE outcome = 'win' AND status = 'completed'`,
+  `CREATE INDEX IF NOT EXISTS idx_claims_phone_win
+  ON claims(phone_e164) WHERE outcome = 'win' AND status = 'completed'`,
+  `CREATE INDEX IF NOT EXISTS idx_kernels_campaign_status
+  ON kernels(campaign_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_players_session
+  ON players(session_token)`,
+  `CREATE TABLE IF NOT EXISTS audit_log (
   id TEXT PRIMARY KEY,
   campaign_id TEXT,
   action TEXT NOT NULL,
   actor TEXT,
   details TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`;
+)`,
+];
 
 export type CampaignRow = {
   id: string;
@@ -164,64 +154,146 @@ export type PrizeRow = {
   quantity_remaining: number;
 };
 
-export function getDb(): Database.Database {
-  if (db) return db;
-
-  const dir = path.dirname(DB_PATH);
+function resolveLocalDbUrl(): string {
+  const filePath =
+    process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "corn-game.db");
+  const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-
-  db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.exec(SCHEMA);
-  migrate(db);
-  return db;
+  return `file:${filePath}`;
 }
 
-function migrate(database: Database.Database) {
-  const cols = database
-    .prepare(`PRAGMA table_info(claims)`)
-    .all() as Array<{ name: string }>;
-  if (!cols.some((c) => c.name === "voided")) {
-    database.exec(`ALTER TABLE claims ADD COLUMN voided INTEGER NOT NULL DEFAULT 0`);
+function createDbClient(): Client {
+  const url = process.env.TURSO_DATABASE_URL ?? process.env.LIBSQL_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.LIBSQL_AUTH_TOKEN;
+
+  if (url) {
+    return createClient({ url, authToken });
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error(
+      "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set on Vercel. Create a database at https://turso.tech"
+    );
+  }
+
+  return createClient({ url: resolveLocalDbUrl() });
+}
+
+async function initSchema(db: Client): Promise<void> {
+  for (const sql of SCHEMA_STATEMENTS) {
+    await db.execute(sql);
+  }
+
+  const cols = await db.execute(`PRAGMA table_info(claims)`);
+  const hasVoided = cols.rows.some((row) => row.name === "voided");
+  if (!hasVoided) {
+    await db.execute(`ALTER TABLE claims ADD COLUMN voided INTEGER NOT NULL DEFAULT 0`);
   }
 }
 
-export function auditLog(
+export async function getClient(): Promise<Client> {
+  if (!client) {
+    client = createDbClient();
+    schemaReady = initSchema(client);
+  }
+  await schemaReady;
+  return client;
+}
+
+function rowToRecord<T>(row: Record<string, unknown>): T {
+  return row as T;
+}
+
+export async function sqlGet<T>(sql: string, args: InArgs = []): Promise<T | undefined> {
+  const db = await getClient();
+  const result = await db.execute({ sql, args });
+  if (result.rows.length === 0) return undefined;
+  return rowToRecord<T>(result.rows[0] as Record<string, unknown>);
+}
+
+export async function sqlAll<T>(sql: string, args: InArgs = []): Promise<T[]> {
+  const db = await getClient();
+  const result = await db.execute({ sql, args });
+  return result.rows.map((row) => rowToRecord<T>(row as Record<string, unknown>));
+}
+
+export async function sqlRun(
+  sql: string,
+  args: InArgs = []
+): Promise<{ rowsAffected: number }> {
+  const db = await getClient();
+  const result = await db.execute({ sql, args });
+  return { rowsAffected: result.rowsAffected };
+}
+
+export async function sqlBatch(
+  statements: Array<{ sql: string; args?: InArgs }>
+): Promise<void> {
+  const db = await getClient();
+  await db.batch(
+    statements.map((s) => ({ sql: s.sql, args: s.args ?? [] })),
+    "write"
+  );
+}
+
+export async function withTransaction<T>(
+  fn: (tx: {
+    run: (sql: string, args?: InArgs) => Promise<{ rowsAffected: number }>;
+    get: <R>(sql: string, args?: InArgs) => Promise<R | undefined>;
+  }) => Promise<T>
+): Promise<T> {
+  const db = await getClient();
+  const txn = await db.transaction("write");
+
+  const run = async (sql: string, args: InArgs = []) => {
+    const result = await txn.execute({ sql, args });
+    return { rowsAffected: result.rowsAffected };
+  };
+
+  const get = async <R>(sql: string, args: InArgs = []): Promise<R | undefined> => {
+    const result = await txn.execute({ sql, args });
+    if (result.rows.length === 0) return undefined;
+    return rowToRecord<R>(result.rows[0] as Record<string, unknown>);
+  };
+
+  try {
+    const value = await fn({ run, get });
+    await txn.commit();
+    return value;
+  } catch (error) {
+    await txn.rollback();
+    throw error;
+  }
+}
+
+export async function auditLog(
   action: string,
   campaignId: string | null,
   actor: string,
   details?: Record<string, unknown>
-): void {
-  const database = getDb();
-  database
-    .prepare(
-      `INSERT INTO audit_log (id, campaign_id, action, actor, details) VALUES (?, ?, ?, ?, ?)`
-    )
-    .run(
+): Promise<void> {
+  await sqlRun(
+    `INSERT INTO audit_log (id, campaign_id, action, actor, details) VALUES (?, ?, ?, ?, ?)`,
+    [
       randomUUID(),
       campaignId,
       action,
       actor,
-      details ? JSON.stringify(details) : null
-    );
+      details ? JSON.stringify(details) : null,
+    ]
+  );
 }
 
-export function getActiveCampaign(): CampaignRow | undefined {
-  const database = getDb();
+export async function getActiveCampaign(): Promise<CampaignRow | undefined> {
   const envId = process.env.CAMPAIGN_ID;
   if (envId) {
-    return database.prepare(`SELECT * FROM campaigns WHERE id = ?`).get(envId) as
-      | CampaignRow
-      | undefined;
+    return sqlGet<CampaignRow>(`SELECT * FROM campaigns WHERE id = ?`, [envId]);
   }
-  return database
-    .prepare(
-      `SELECT * FROM campaigns WHERE status = 'active' ORDER BY created_at DESC LIMIT 1`
-    )
-    .get() as CampaignRow | undefined;
+  return sqlGet<CampaignRow>(
+    `SELECT * FROM campaigns WHERE status = 'active' ORDER BY created_at DESC LIMIT 1`
+  );
 }
 
 export function isCampaignPlayable(campaign: CampaignRow): {

@@ -2,8 +2,11 @@ import { randomUUID } from "crypto";
 import {
   auditLog,
   getActiveCampaign,
-  getDb,
   isCampaignPlayable,
+  sqlAll,
+  sqlGet,
+  sqlRun,
+  withTransaction,
   type CampaignRow,
   type ClaimRow,
   type KernelRow,
@@ -21,14 +24,14 @@ export type CompleteClaimResult =
   | { ok: true; claimId: string }
   | { ok: false; error: string; message: string };
 
-export function getOrCreatePlayer(
+export async function getOrCreatePlayer(
   sessionToken: string,
   campaignId: string
-): PlayerRow {
-  const db = getDb();
-  const existing = db
-    .prepare(`SELECT * FROM players WHERE session_token = ?`)
-    .get(sessionToken) as PlayerRow | undefined;
+): Promise<PlayerRow> {
+  const existing = await sqlGet<PlayerRow>(
+    `SELECT * FROM players WHERE session_token = ?`,
+    [sessionToken]
+  );
 
   if (existing) return existing;
 
@@ -42,21 +45,22 @@ export function getOrCreatePlayer(
     created_at: new Date().toISOString(),
   };
 
-  db.prepare(
+  await sqlRun(
     `INSERT INTO players (id, session_token, campaign_id, status, created_at)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(player.id, player.session_token, player.campaign_id, player.status, player.created_at);
+     VALUES (?, ?, ?, ?, ?)`,
+    [player.id, player.session_token, player.campaign_id, player.status, player.created_at]
+  );
 
   return player;
 }
 
-export function claimKernel(params: {
+export async function claimKernel(params: {
   kernelId: string;
   sessionToken: string;
   ip: string;
   userAgent: string;
-}): ClaimResult {
-  const campaign = getActiveCampaign();
+}): Promise<ClaimResult> {
+  const campaign = await getActiveCampaign();
   if (!campaign) {
     return { ok: false, error: "no_campaign", message: "No active campaign." };
   }
@@ -70,8 +74,7 @@ export function claimKernel(params: {
     };
   }
 
-  const db = getDb();
-  const player = getOrCreatePlayer(params.sessionToken, campaign.id);
+  const player = await getOrCreatePlayer(params.sessionToken, campaign.id);
 
   if (player.status !== "new") {
     return {
@@ -81,9 +84,10 @@ export function claimKernel(params: {
     };
   }
 
-  const kernel = db
-    .prepare(`SELECT * FROM kernels WHERE id = ? AND campaign_id = ?`)
-    .get(params.kernelId, campaign.id) as KernelRow | undefined;
+  const kernel = await sqlGet<KernelRow>(
+    `SELECT * FROM kernels WHERE id = ? AND campaign_id = ?`,
+    [params.kernelId, campaign.id]
+  );
 
   if (!kernel || !kernel.active) {
     return { ok: false, error: "invalid_kernel", message: "Invalid kernel." };
@@ -104,33 +108,32 @@ export function claimKernel(params: {
   const claimId = randomUUID();
   const now = new Date().toISOString();
 
-  const transaction = db.transaction(() => {
-    const update = db
-      .prepare(
-        `UPDATE kernels
-         SET status = 'claimed', claimed_at = ?, claimed_by_player_id = ?
-         WHERE id = ? AND status = 'available'`
-      )
-      .run(now, player.id, params.kernelId);
+  const result = await withTransaction(async (tx) => {
+    const update = await tx.run(
+      `UPDATE kernels
+       SET status = 'claimed', claimed_at = ?, claimed_by_player_id = ?
+       WHERE id = ? AND status = 'available'`,
+      [now, player.id, params.kernelId]
+    );
 
-    if (update.changes === 0) {
+    if (update.rowsAffected === 0) {
       return { race: true as const };
     }
 
     let prize: PrizeRow | undefined;
     if (kernel.prize_id) {
-      prize = db
-        .prepare(`SELECT * FROM prizes WHERE id = ? AND quantity_remaining > 0`)
-        .get(kernel.prize_id) as PrizeRow | undefined;
+      prize = await tx.get<PrizeRow>(
+        `SELECT * FROM prizes WHERE id = ? AND quantity_remaining > 0`,
+        [kernel.prize_id]
+      );
 
       if (prize) {
-        const dec = db
-          .prepare(
-            `UPDATE prizes SET quantity_remaining = quantity_remaining - 1
-             WHERE id = ? AND quantity_remaining > 0`
-          )
-          .run(kernel.prize_id);
-        if (dec.changes === 0) {
+        const dec = await tx.run(
+          `UPDATE prizes SET quantity_remaining = quantity_remaining - 1
+           WHERE id = ? AND quantity_remaining > 0`,
+          [kernel.prize_id]
+        );
+        if (dec.rowsAffected === 0) {
           prize = undefined;
         }
       }
@@ -140,33 +143,33 @@ export function claimKernel(params: {
     const outcome = isWin ? "win" : "lose";
     const status = isWin ? "pending" : "completed";
 
-    db.prepare(
+    await tx.run(
       `INSERT INTO claims (
         id, campaign_id, kernel_id, player_id, prize_id, outcome, status,
         ip, user_agent, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      claimId,
-      campaign.id,
-      params.kernelId,
-      player.id,
-      prize?.id ?? null,
-      outcome,
-      status,
-      params.ip,
-      params.userAgent,
-      now
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        claimId,
+        campaign.id,
+        params.kernelId,
+        player.id,
+        prize?.id ?? null,
+        outcome,
+        status,
+        params.ip,
+        params.userAgent,
+        now,
+      ]
     );
 
     const playerStatus = isWin ? "winner_pending" : "finished";
-    db.prepare(
-      `UPDATE players SET status = ?, first_click_at = ?, pending_claim_id = ? WHERE id = ?`
-    ).run(playerStatus, now, isWin ? claimId : null, player.id);
+    await tx.run(
+      `UPDATE players SET status = ?, first_click_at = ?, pending_claim_id = ? WHERE id = ?`,
+      [playerStatus, now, isWin ? claimId : null, player.id]
+    );
 
     return { race: false as const, isWin, prize };
   });
-
-  const result = transaction();
 
   if (result.race) {
     return {
@@ -176,7 +179,7 @@ export function claimKernel(params: {
     };
   }
 
-  auditLog("kernel_claim", campaign.id, player.id, {
+  await auditLog("kernel_claim", campaign.id, player.id, {
     kernelId: params.kernelId,
     outcome: result.isWin ? "win" : "lose",
     claimId,
@@ -194,7 +197,7 @@ export function claimKernel(params: {
   return { ok: true, outcome: "lose", claimId };
 }
 
-export function completeClaim(params: {
+export async function completeClaim(params: {
   claimId: string;
   sessionToken: string;
   email: string;
@@ -202,7 +205,7 @@ export function completeClaim(params: {
   consent: boolean;
   ip: string;
   userAgent: string;
-}): CompleteClaimResult {
+}): Promise<CompleteClaimResult> {
   if (!params.consent) {
     return {
       ok: false,
@@ -221,29 +224,29 @@ export function completeClaim(params: {
     return { ok: false, error: "invalid_phone", message: "Please enter a valid US phone number." };
   }
 
-  const db = getDb();
-  const player = db
-    .prepare(`SELECT * FROM players WHERE session_token = ?`)
-    .get(params.sessionToken) as PlayerRow | undefined;
+  const player = await sqlGet<PlayerRow>(
+    `SELECT * FROM players WHERE session_token = ?`,
+    [params.sessionToken]
+  );
 
   if (!player || player.status !== "winner_pending" || player.pending_claim_id !== params.claimId) {
     return { ok: false, error: "invalid_claim", message: "Invalid or expired claim." };
   }
 
-  const claim = db
-    .prepare(`SELECT * FROM claims WHERE id = ? AND player_id = ? AND status = 'pending'`)
-    .get(params.claimId, player.id) as ClaimRow | undefined;
+  const claim = await sqlGet<ClaimRow>(
+    `SELECT * FROM claims WHERE id = ? AND player_id = ? AND status = 'pending'`,
+    [params.claimId, player.id]
+  );
 
   if (!claim) {
     return { ok: false, error: "invalid_claim", message: "Claim not found." };
   }
 
-  const dupEmail = db
-    .prepare(
-      `SELECT id FROM claims
-       WHERE email_normalized = ? AND outcome = 'win' AND status = 'completed' AND id != ?`
-    )
-    .get(emailNorm, params.claimId) as { id: string } | undefined;
+  const dupEmail = await sqlGet<{ id: string }>(
+    `SELECT id FROM claims
+     WHERE email_normalized = ? AND outcome = 'win' AND status = 'completed' AND id != ?`,
+    [emailNorm, params.claimId]
+  );
 
   if (dupEmail) {
     return {
@@ -253,12 +256,11 @@ export function completeClaim(params: {
     };
   }
 
-  const dupPhone = db
-    .prepare(
-      `SELECT id FROM claims
-       WHERE phone_e164 = ? AND outcome = 'win' AND status = 'completed' AND id != ?`
-    )
-    .get(phoneE164, params.claimId) as { id: string } | undefined;
+  const dupPhone = await sqlGet<{ id: string }>(
+    `SELECT id FROM claims
+     WHERE phone_e164 = ? AND outcome = 'win' AND status = 'completed' AND id != ?`,
+    [phoneE164, params.claimId]
+  );
 
   if (dupPhone) {
     return {
@@ -270,21 +272,23 @@ export function completeClaim(params: {
 
   const now = new Date().toISOString();
   const prize = claim.prize_id
-    ? (db.prepare(`SELECT * FROM prizes WHERE id = ?`).get(claim.prize_id) as PrizeRow)
+    ? await sqlGet<PrizeRow>(`SELECT * FROM prizes WHERE id = ?`, [claim.prize_id])
     : null;
 
-  db.prepare(
+  await sqlRun(
     `UPDATE claims SET
       email = ?, phone = ?, email_normalized = ?, phone_e164 = ?,
       status = 'completed', verified_at = ?
-     WHERE id = ?`
-  ).run(emailNorm, phoneE164, emailNorm, phoneE164, now, params.claimId);
-
-  db.prepare(`UPDATE players SET status = 'winner_claimed', pending_claim_id = NULL WHERE id = ?`).run(
-    player.id
+     WHERE id = ?`,
+    [emailNorm, phoneE164, emailNorm, phoneE164, now, params.claimId]
   );
 
-  auditLog("claim_complete", claim.campaign_id, player.id, { claimId: params.claimId });
+  await sqlRun(
+    `UPDATE players SET status = 'winner_claimed', pending_claim_id = NULL WHERE id = ?`,
+    [player.id]
+  );
+
+  await auditLog("claim_complete", claim.campaign_id, player.id, { claimId: params.claimId });
 
   if (prize) {
     notifyWinner({
@@ -292,12 +296,12 @@ export function completeClaim(params: {
       kernelId: claim.kernel_id,
       claimId: params.claimId,
     })
-      .then(() => {
-        db.prepare(`UPDATE claims SET notified_at = ? WHERE id = ?`).run(
+      .then(() =>
+        sqlRun(`UPDATE claims SET notified_at = ? WHERE id = ?`, [
           new Date().toISOString(),
-          params.claimId
-        );
-      })
+          params.claimId,
+        ])
+      )
       .catch((err) => {
         console.error("[notify-winner] failed", err instanceof Error ? err.message : err);
       });
@@ -306,57 +310,48 @@ export function completeClaim(params: {
   return { ok: true, claimId: params.claimId };
 }
 
-export function getKernelState(campaignId: string) {
-  const db = getDb();
-  const claimed = db
-    .prepare(
-      `SELECT id, row, col, status FROM kernels
-       WHERE campaign_id = ? AND status = 'claimed'`
-    )
-    .all(campaignId) as Pick<KernelRow, "id" | "row" | "col" | "status">[];
+export async function getKernelState(campaignId: string) {
+  const claimed = await sqlAll<Pick<KernelRow, "id" | "row" | "col" | "status">>(
+    `SELECT id, row, col, status FROM kernels
+     WHERE campaign_id = ? AND status = 'claimed'`,
+    [campaignId]
+  );
 
-  const campaign = db
-    .prepare(`SELECT * FROM campaigns WHERE id = ?`)
-    .get(campaignId) as CampaignRow | undefined;
+  const campaign = await sqlGet<CampaignRow>(
+    `SELECT * FROM campaigns WHERE id = ?`,
+    [campaignId]
+  );
 
   return { campaign, claimedKernelIds: claimed.map((k) => k.id), claimed };
 }
 
-export function getPlayerState(sessionToken: string) {
-  const db = getDb();
-  const player = db
-    .prepare(`SELECT * FROM players WHERE session_token = ?`)
-    .get(sessionToken) as PlayerRow | undefined;
-
+export async function getPlayerState(sessionToken: string) {
+  const player = await sqlGet<PlayerRow>(
+    `SELECT * FROM players WHERE session_token = ?`,
+    [sessionToken]
+  );
   return player ?? null;
 }
 
-export function getKernelsForCampaign(campaignId: string): KernelRow[] {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT * FROM kernels WHERE campaign_id = ? AND active = 1 ORDER BY row, col`
-    )
-    .all(campaignId) as KernelRow[];
+export async function getKernelsForCampaign(campaignId: string): Promise<KernelRow[]> {
+  return sqlAll<KernelRow>(
+    `SELECT * FROM kernels WHERE campaign_id = ? AND active = 1 ORDER BY row, col`,
+    [campaignId]
+  );
 }
 
-export function getClaimsForCampaign(campaignId: string) {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT c.*, p.label as prize_label, k.row, k.col
-       FROM claims c
-       LEFT JOIN prizes p ON c.prize_id = p.id
-       LEFT JOIN kernels k ON c.kernel_id = k.id
-       WHERE c.campaign_id = ?
-       ORDER BY c.created_at DESC`
-    )
-    .all(campaignId);
+export async function getClaimsForCampaign(campaignId: string) {
+  return sqlAll(
+    `SELECT c.*, p.label as prize_label, k.row, k.col
+     FROM claims c
+     LEFT JOIN prizes p ON c.prize_id = p.id
+     LEFT JOIN kernels k ON c.kernel_id = k.id
+     WHERE c.campaign_id = ?
+     ORDER BY c.created_at DESC`,
+    [campaignId]
+  );
 }
 
-export function getPrizesForCampaign(campaignId: string): PrizeRow[] {
-  const db = getDb();
-  return db
-    .prepare(`SELECT * FROM prizes WHERE campaign_id = ?`)
-    .all(campaignId) as PrizeRow[];
+export async function getPrizesForCampaign(campaignId: string): Promise<PrizeRow[]> {
+  return sqlAll<PrizeRow>(`SELECT * FROM prizes WHERE campaign_id = ?`, [campaignId]);
 }

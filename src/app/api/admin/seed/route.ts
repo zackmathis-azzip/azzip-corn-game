@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
 import { seedCampaign } from "@/lib/seed";
-import { auditLog, getDb } from "@/lib/db";
+import { auditLog, sqlRun } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -25,16 +25,16 @@ export async function POST(request: Request) {
   }
 
   if (body.force !== false) {
-    getDb().prepare(`UPDATE campaigns SET status = 'ended' WHERE status = 'active'`).run();
+    await sqlRun(`UPDATE campaigns SET status = 'ended' WHERE status = 'active'`);
   }
 
-  const id = seedCampaign({
+  const id = await seedCampaign({
     name: body.name,
     startsAt: body.startsAt,
     endsAt: body.endsAt,
     seed: body.seed,
   });
 
-  auditLog("admin_seed", id, "admin", { seed: body.seed });
+  await auditLog("admin_seed", id, "admin", { seed: body.seed });
   return NextResponse.json({ success: true, campaignId: id });
 }
