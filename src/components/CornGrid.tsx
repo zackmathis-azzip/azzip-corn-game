@@ -7,8 +7,6 @@ import {
   KERNEL_WIDTH,
   KERNEL_HEIGHT,
   KERNEL_BORDER_RADIUS,
-  DESKTOP_ARTBOARD,
-  MOBILE_ARTBOARD,
 } from "@/lib/config";
 
 export type KernelCell = {
@@ -44,22 +42,20 @@ export function CornGrid({
   );
 
   return (
-    <div className="corn-stage">
+    <div
+      className="corn-stage"
+      style={
+        {
+          "--cols": GRID_COLS,
+          "--rows": GRID_ROWS,
+          "--kw": `${KERNEL_WIDTH}px`,
+          "--kh": `${KERNEL_HEIGHT}px`,
+          "--radius": `${KERNEL_BORDER_RADIUS}px`,
+        } as React.CSSProperties
+      }
+    >
       <div
         className="corn-grid"
-        style={
-          {
-            "--cols": GRID_COLS,
-            "--rows": GRID_ROWS,
-            "--kw": `${KERNEL_WIDTH}px`,
-            "--kh": `${KERNEL_HEIGHT}px`,
-            "--radius": `${KERNEL_BORDER_RADIUS}px`,
-            "--desktop-w": `${DESKTOP_ARTBOARD.width}px`,
-            "--desktop-h": `${DESKTOP_ARTBOARD.height}px`,
-            "--mobile-w": `${MOBILE_ARTBOARD.width}px`,
-            "--mobile-h": `${MOBILE_ARTBOARD.height}px`,
-          } as React.CSSProperties
-        }
         role="grid"
         aria-label="Corn kernel game board"
       >

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sqlGet } from "@/lib/db";
-import { getKernelState, getPlayerState, getKernelsForCampaign } from "@/lib/game";
+import { getKernelState, getPlayerState, getKernelsForCampaign, getRemainingPrizeCount } from "@/lib/game";
 import { getSessionToken } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -33,12 +33,15 @@ export async function GET(request: NextRequest, { params }: Params) {
       }))
     : undefined;
 
+  const prizesRemaining = await getRemainingPrizeCount(id);
+
   return NextResponse.json({
     campaignId: id,
     status: (campaign as { status: string }).status,
     claimedKernelIds: state.claimedKernelIds,
     playerStatus: player?.status ?? null,
     pendingClaimId: player?.pending_claim_id ?? null,
+    prizesRemaining,
     kernels,
   });
 }

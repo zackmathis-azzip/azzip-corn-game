@@ -50,11 +50,16 @@ a {
 }
 
 .played-banner,
-.status-message {
+.status-message,
+.prize-counter {
   margin-top: 0.75rem;
   padding: 0.5rem 1rem;
   background: rgba(255, 219, 0, 0.15);
   border-radius: 8px;
+}
+
+.prize-counter strong {
+  color: var(--azzip-yellow);
 }
 
 .error-banner {
@@ -78,31 +83,49 @@ a {
   justify-content: center;
   overflow: hidden;
   flex: 1;
+  --grid-w: calc(var(--cols) * var(--kw));
+  --grid-h: calc(var(--rows) * var(--kh));
 }
 
 .corn-grid {
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--kw));
   grid-template-rows: repeat(var(--rows), var(--kh));
-  width: calc(var(--cols) * var(--kw));
-  height: calc(var(--rows) * var(--kh));
+  width: var(--grid-w);
+  height: var(--grid-h);
   transform-origin: top center;
 }
 
 @media (orientation: landscape), (min-width: 900px) {
+  .corn-stage {
+    --desktop-scale: min(
+      1,
+      calc(80vw / var(--grid-w)),
+      calc((100dvh - 220px) / var(--grid-h))
+    );
+    width: calc(var(--grid-w) * var(--desktop-scale));
+    height: calc(var(--grid-h) * var(--desktop-scale));
+  }
+
   .corn-grid {
-    transform: scale(min(1, calc(var(--desktop-w) / (var(--cols) * 36))));
+    transform: scale(var(--desktop-scale));
   }
 }
 
 @media (orientation: portrait) and (max-width: 899px) {
-  .corn-grid {
-    transform: scale(
-      min(
-        calc(var(--mobile-w) / (var(--cols) * 36)),
-        calc((var(--mobile-h) - 180px) / (var(--rows) * 45))
-      )
+  .corn-stage {
+    --mobile-scale: min(
+      calc(92vw / var(--grid-h)),
+      calc((100dvh - 200px) / var(--grid-w))
     );
+    width: calc(var(--grid-h) * var(--mobile-scale));
+    height: calc(var(--grid-w) * var(--mobile-scale));
+    align-items: center;
+  }
+
+  .corn-grid {
+    transform-origin: center center;
+    transform: rotate(90deg) scale(var(--mobile-scale));
   }
 }
 

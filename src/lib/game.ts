@@ -355,3 +355,11 @@ export async function getClaimsForCampaign(campaignId: string) {
 export async function getPrizesForCampaign(campaignId: string): Promise<PrizeRow[]> {
   return sqlAll<PrizeRow>(`SELECT * FROM prizes WHERE campaign_id = ?`, [campaignId]);
 }
+
+export async function getRemainingPrizeCount(campaignId: string): Promise<number> {
+  const row = await sqlGet<{ total: number }>(
+    `SELECT COALESCE(SUM(quantity_remaining), 0) as total FROM prizes WHERE campaign_id = ?`,
+    [campaignId]
+  );
+  return row?.total ?? 0;
+}

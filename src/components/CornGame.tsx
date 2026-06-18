@@ -27,6 +27,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
   const [kernels, setKernels] = useState<KernelCell[]>([]);
   const [claimedIds, setClaimedIds] = useState<Set<string>>(new Set());
   const [playerStatus, setPlayerStatus] = useState<string | null>(null);
+  const [prizesRemaining, setPrizesRemaining] = useState<number | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [bootLoading, setBootLoading] = useState(true);
@@ -48,6 +49,9 @@ export function CornGame({ turnstileSiteKey }: Props) {
     const data = await res.json();
     setClaimedIds(new Set(data.claimedKernelIds as string[]));
     setPlayerStatus(data.playerStatus);
+    if (typeof data.prizesRemaining === "number") {
+      setPrizesRemaining(data.prizesRemaining);
+    }
 
     if (full && data.kernels) {
       setKernels(data.kernels);
@@ -165,6 +169,15 @@ export function CornGame({ turnstileSiteKey }: Props) {
       <header className="play-header">
         <h1>Azzip Corn Kernel Game</h1>
         <p>Pick one kernel — one play per person!</p>
+        {prizesRemaining !== null && (
+          <p className="prize-counter" role="status">
+            Good Luck, Corn-testants!{" "}
+            <strong>
+              {prizesRemaining} prize{prizesRemaining === 1 ? "" : "s"}
+            </strong>{" "}
+            remain!
+          </p>
+        )}
         {hasPlayed && playerStatus !== "winner_pending" && (
           <p className="played-banner" role="status">
             Thanks for playing!
@@ -193,7 +206,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
 
       <Modal
         open={modal.type === "lose"}
-        title="Better luck next time!"
+        title="You Corn't win em all, but thanks for playing!"
         onClose={() => setModal({ type: "none" })}
       >
         <p>That kernel wasn&apos;t a winner. Thanks for playing Azzip!</p>

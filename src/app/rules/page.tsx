@@ -39,12 +39,15 @@ export default function RulesPage() {
       <h2>Winner Notification</h2>
       <p>
         Winners must provide a valid email address and phone number to claim. Duplicate entries using
-        the same email or phone number will be disqualified.
+        the same email or phone number will be disqualified. Only paid cell phone numbers are eligible for prizes - Google Voice and others are ineligible. 
+        Prizes will be manually fulfilled through the Creator Rewards app. If your phone number is not associated with a Creator Rewards account, 
+        it may be created on your behalf.
+
       </p>
 
       <h2>Campaign Period</h2>
       <p>
-        Begins and ends on dates published on the promotion homepage. Azzip Pizza reserves the right
+        Begins June 18th, 2026 and ends on June 30th, 2026 or when all prizes have been claimed. Azzip Pizza reserves the right
         to modify or terminate the promotion at any time.
       </p>
 
