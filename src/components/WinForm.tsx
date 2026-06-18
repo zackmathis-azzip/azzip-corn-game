@@ -89,7 +89,11 @@ export function WinForm({ claimId, prizeLabel, turnstileSiteKey, onSuccess, onEr
   return (
     <form onSubmit={handleSubmit} className="win-form">
       <p className="win-prize">You won: <strong>{prizeLabel}</strong></p>
-      <p className="win-copy">Enter your contact info to claim your prize. One play per person. Prize will be delivered by the end of the promotion to your Creator Rewards wallet. If you don't have a Creator Rewards account, it may be created on your behalf.</p>
+      <p className="win-copy">
+        Enter your contact info to claim your prize. One play per person. Prize will be delivered by the
+        end of the promotion to your Creator Rewards wallet. If you don&apos;t have a Creator Rewards
+        account, it may be created on your behalf.
+      </p>
 
       <label className="form-label">
         Email
