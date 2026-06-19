@@ -300,6 +300,24 @@ export async function getActiveCampaign(): Promise<CampaignRow | undefined> {
   );
 }
 
+/**
+ * Campaign to display to players: the live one whether it's active OR paused
+ * (kill-switch). Returning the paused campaign here — instead of nothing —
+ * keeps the same board intact and prevents an accidental auto-reseed.
+ */
+export async function getCurrentCampaign(): Promise<CampaignRow | undefined> {
+  const envId = process.env.CAMPAIGN_ID;
+  if (envId) {
+    return sqlGet<CampaignRow>(`SELECT * FROM campaigns WHERE id = ?`, [envId]);
+  }
+  return sqlGet<CampaignRow>(
+    `SELECT * FROM campaigns
+     WHERE status IN ('active', 'paused')
+     ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, created_at DESC
+     LIMIT 1`
+  );
+}
+
 export function isCampaignPlayable(campaign: CampaignRow): {
   playable: boolean;
   reason?: string;

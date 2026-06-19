@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
-import { getActiveCampaign } from "@/lib/db";
-import { seedCampaign } from "@/lib/seed";
+import { getCurrentCampaign } from "@/lib/db";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  let campaign = await getActiveCampaign();
-  if (!campaign) {
-    await seedCampaign();
-    campaign = await getActiveCampaign();
-  }
+  const campaign = await getCurrentCampaign();
 
   if (!campaign) {
     return NextResponse.json({ campaign: null });

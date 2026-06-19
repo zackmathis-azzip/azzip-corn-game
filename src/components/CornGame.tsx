@@ -86,6 +86,9 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
     const data = await res.json();
     setClaimedIds(new Set(data.claimedKernelIds as string[]));
     setPlayerStatus(data.playerStatus);
+    if (typeof data.status === "string") {
+      setCampaign((c) => (c && c.status !== data.status ? { ...c, status: data.status } : c));
+    }
     if (typeof data.prizesRemaining === "number") {
       setPrizesRemaining(data.prizesRemaining);
     }
@@ -252,6 +255,12 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
       <header className="play-header">
         <h1>Azzip Corn Kernel Game</h1>
         <p>Pick one kernel — one play per person!</p>
+        {campaign.status === "paused" && (
+          <p className="status-message" role="status">
+            The game is paused for a quick break. Hang tight — your kernels will be right here
+            when we&apos;re back! 🌽
+          </p>
+        )}
         {prizesRemaining !== null && (
           <p className="prize-counter" role="status">
             Good Luck, Corn-testants!{" "}
