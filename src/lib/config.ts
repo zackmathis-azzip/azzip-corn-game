@@ -1,10 +1,13 @@
-export const GRID_COLS = 53;
-export const GRID_ROWS = 24;
-export const KERNEL_WIDTH = 36;
-export const KERNEL_HEIGHT = 45;
-export const KERNEL_BORDER_RADIUS = 9;
-export const GRID_WIDTH = GRID_COLS * KERNEL_WIDTH; // 1908
-export const GRID_HEIGHT = GRID_ROWS * KERNEL_HEIGHT; // 1080
+export const GRID_COLS = 58;
+export const GRID_ROWS = 29;
+export const KERNEL_WIDTH = 30;
+export const KERNEL_HEIGHT = 38;
+export const KERNEL_BORDER_RADIUS = 8;
+export const GRID_WIDTH = GRID_COLS * KERNEL_WIDTH; // 1740
+export const GRID_HEIGHT = GRID_ROWS * KERNEL_HEIGHT; // 1102
+
+/** Verified Resend sender — do not use noreply@azzippizza.com (unverified). */
+export const RESEND_FROM_DEFAULT = "Azzip Corn Game <noreply@azzippizza.me>";
 
 export const DESKTOP_ARTBOARD = { width: 1920, height: 1080 };
 export const MOBILE_ARTBOARD = { width: 1080, height: 1920 };

@@ -68,8 +68,8 @@ See [`.env.example`](.env.example) for the full list.
 
 ## Game design
 
-- **Grid**: 53×24 cells, 36×45px kernels, 9px radius, 1px black border
-- **Mask**: Oval cob silhouette — inactive cells are not rendered/clickable
+- **Grid**: 58×29 cells, 30×38px kernels, 8px radius, 1px black border
+- **Mask**: Oval cob silhouette — **1,250** playable kernels (432 inactive cells hidden)
 - **Colors**: Seeded yellows weighted toward `#FFDB00` between `#FFAC00`–`#FFEC00`
 - **Prizes**: 25× Free Love It Elote, 25× $5 Off — pre-assigned at seed
 - **One play per session**; wins deduped by normalized email or E.164 phone

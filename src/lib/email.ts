@@ -1,6 +1,15 @@
 import { Resend } from "resend";
-import { FULFILLMENT_EMAIL } from "./config";
+import { FULFILLMENT_EMAIL, RESEND_FROM_DEFAULT } from "./config";
 import { formatPhoneForDisplay } from "./phone";
+
+/** Resend rejects unverified senders — production was set to noreply@azzippizza.com by mistake. */
+export function resolveResendFrom(raw = process.env.RESEND_FROM): string {
+  const configured = raw?.trim() || RESEND_FROM_DEFAULT;
+  if (/noreply@azzippizza\.com/i.test(configured)) {
+    return configured.replace(/noreply@azzippizza\.com/gi, "noreply@azzippizza.me");
+  }
+  return configured;
+}
 
 export function normalizeEmail(email: string): string | null {
   const trimmed = email.trim().toLowerCase();
@@ -73,7 +82,7 @@ export async function sendWinnerConfirmationEmail(params: {
 
   if (apiKey) {
     const resend = new Resend(apiKey);
-    const from = process.env.RESEND_FROM ?? "Azzip Corn Game <onboarding@resend.dev>";
+    const from = resolveResendFrom();
     await resend.emails.send({
       from,
       to: params.toEmail,
