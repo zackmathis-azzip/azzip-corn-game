@@ -18,8 +18,8 @@ export default function RulesPage() {
       <h2>How to Play</h2>
       <p>
         Visit the promotion website during the campaign period. Select one corn kernel on the game
-        board. Each person may play once per promotion period, verified by session, email, and/or
-        phone number.
+        board. Each person may play once per promotion period, verified by session, email, phone
+        number, and IP address (limited plays per network per day).
       </p>
 
       <h2>Prizes</h2>
@@ -42,7 +42,10 @@ export default function RulesPage() {
         the same email or phone number will be disqualified. Only paid cell phone numbers are eligible for prizes - Google Voice and others are ineligible. 
         Prizes will be manually fulfilled through the Creator Rewards app. If your phone number is not associated with a Creator Rewards account, 
         it may be created on your behalf.
-
+      </p>
+      <p>
+        If you win but do not complete the claim form within 30 minutes, your unclaimed prize may
+        expire and that kernel may return to the prize pool for other players.
       </p>
 
       <h2>Campaign Period</h2>

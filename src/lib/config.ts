@@ -27,12 +27,24 @@ export const ADMIN_COOKIE = "admin_auth";
 export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const RATE_LIMIT_MAX_REQUESTS = 30;
 
+/** Soft cap: max kernel claims per IP per rolling 24h (office-friendly, not unlimited). */
+export const IP_PLAY_LIMIT = 20;
+export const IP_PLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Unclaimed instant-win hold time before kernel + prize return to the pool (production). */
+export const UNCLAIMED_WIN_TIMEOUT_MS =
+  Math.max(1, Number(process.env.UNCLAIMED_WIN_TIMEOUT_MINUTES ?? 30)) * 60 * 1000;
+
 export const SPONSOR_AZZIP_LOGO_URL =
   "https://azzippizza.com/wp-content/themes/azzip/assets/img/logo-alt.svg";
-export const SPONSOR_OLD_MAJOR_LOGO_URL =
-  "https://oldmajormarket.com/wp-content/uploads/2026/02/Old-Major-Official2019.png";
+/** Wordmark with keyed transparency (scripts/process-old-major-wordmark.mjs) */
+export const SPONSOR_OLD_MAJOR_LOGO_URL = "/sponsors/old-major-wordmark.png";
 
 /** Server-only: allow unlimited plays per session for QA (never enable in production). */
 export function devAllowReplay(): boolean {
-  return process.env.DEV_ALLOW_REPLAY === "true";
+  const value = process.env.DEV_ALLOW_REPLAY?.trim().toLowerCase();
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  // Local `npm run dev` — on by default unless explicitly disabled above.
+  return process.env.NODE_ENV === "development";
 }

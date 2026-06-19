@@ -29,6 +29,8 @@ type Props = {
   disabled: boolean;
   loadingId: string | null;
   onKernelClick: (kernelId: string) => void;
+  /** Dev only: render every kernel as claimed for layout preview */
+  previewAllClaimed?: boolean;
 };
 
 export function CornGrid({
@@ -37,6 +39,7 @@ export function CornGrid({
   disabled,
   loadingId,
   onKernelClick,
+  previewAllClaimed = false,
 }: Props) {
   const activeKernels = useMemo(
     () => kernels.filter((k) => k.active),
@@ -58,24 +61,30 @@ export function CornGrid({
     >
       <div className="corn-canvas">
         <div className="corn-sponsors" aria-hidden>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="corn-sponsor-logo corn-sponsor-logo--azzip"
-            src={SPONSOR_AZZIP_LOGO_URL}
-            alt=""
-          />
+          <div className="corn-sponsor-slot corn-sponsor-slot--azzip">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="corn-sponsor-logo corn-sponsor-logo--azzip"
+              src={SPONSOR_AZZIP_LOGO_URL}
+              alt=""
+              referrerPolicy="no-referrer"
+            />
+          </div>
           <span className="corn-sponsor-x">×</span>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className="corn-sponsor-logo corn-sponsor-logo--old-major"
-            src={SPONSOR_OLD_MAJOR_LOGO_URL}
-            alt=""
-          />
+          <div className="corn-sponsor-slot corn-sponsor-slot--old-major">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="corn-sponsor-logo corn-sponsor-logo--old-major"
+              src={SPONSOR_OLD_MAJOR_LOGO_URL}
+              alt=""
+            />
+          </div>
         </div>
         <div className="corn-grid" role="grid" aria-label="Corn kernel game board">
           {activeKernels.map((kernel) => {
-            const isClaimed = claimedIds.has(kernel.id) || kernel.status === "claimed";
-            const isLoading = loadingId === kernel.id;
+            const isClaimed =
+              previewAllClaimed || claimedIds.has(kernel.id) || kernel.status === "claimed";
+            const isLoading = !previewAllClaimed && loadingId === kernel.id;
             const isDisabled = disabled || isClaimed || isLoading;
 
             return (
@@ -83,12 +92,11 @@ export function CornGrid({
                 key={kernel.id}
                 type="button"
                 role="gridcell"
-                className="corn-kernel"
+                className={`corn-kernel${isClaimed ? " corn-kernel--claimed" : ""}`}
                 style={{
                   gridRow: kernel.row + 1,
                   gridColumn: kernel.col + 1,
                   backgroundColor: isClaimed ? "#4a3728" : kernel.color,
-                  opacity: isClaimed ? 0.82 : 1,
                 }}
                 disabled={isDisabled}
                 aria-disabled={isDisabled}

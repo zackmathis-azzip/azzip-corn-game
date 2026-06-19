@@ -13,7 +13,7 @@ import {
   type PlayerRow,
   type PrizeRow,
 } from "./db";
-import { devAllowReplay } from "./config";
+import { devAllowReplay, IP_PLAY_LIMIT, IP_PLAY_WINDOW_MS, UNCLAIMED_WIN_TIMEOUT_MS } from "./config";
 import { normalizeEmail, sendWinnerConfirmationEmail } from "./email";
 import { normalizePhone } from "./phone";
 
@@ -24,6 +24,44 @@ export type ClaimResult =
 export type CompleteClaimResult =
   | { ok: true; claimId: string }
   | { ok: false; error: string; message: string };
+
+export async function checkIpPlayLimit(
+  ip: string,
+  campaignId: string
+): Promise<{ allowed: boolean; count: number }> {
+  if (devAllowReplay() || ip === "unknown") {
+    return { allowed: true, count: 0 };
+  }
+
+  const since = new Date(Date.now() - IP_PLAY_WINDOW_MS).toISOString();
+  const row = await sqlGet<{ cnt: number }>(
+    `SELECT COUNT(*) as cnt FROM claims
+     WHERE ip = ? AND campaign_id = ? AND created_at >= ?`,
+    [ip, campaignId, since]
+  );
+  const count = row?.cnt ?? 0;
+  return { allowed: count < IP_PLAY_LIMIT, count };
+}
+
+export async function syncDevReplayPlayer(player: PlayerRow | null): Promise<PlayerRow | null> {
+  if (!player || !devAllowReplay()) return player;
+
+  // Keep winner_pending so the claim form can be completed; reset only terminal states.
+  const resettable = new Set(["finished", "winner_claimed"]);
+  if (!resettable.has(player.status)) return player;
+
+  await sqlRun(
+    `UPDATE players SET status = 'new', first_click_at = NULL, pending_claim_id = NULL WHERE id = ?`,
+    [player.id]
+  );
+
+  return {
+    ...player,
+    status: "new",
+    first_click_at: null,
+    pending_claim_id: null,
+  };
+}
 
 export async function getOrCreatePlayer(
   sessionToken: string,
@@ -75,7 +113,24 @@ export async function claimKernel(params: {
     };
   }
 
-  const player = await getOrCreatePlayer(params.sessionToken, campaign.id);
+  await releaseExpiredPendingWins(campaign.id);
+
+  const ipLimit = await checkIpPlayLimit(params.ip, campaign.id);
+  if (!ipLimit.allowed) {
+    return {
+      ok: false,
+      error: "ip_limit_exceeded",
+      message:
+        "Too many plays from your network in the last 24 hours. Please try again later.",
+    };
+  }
+
+  const player = await syncDevReplayPlayer(
+    await getOrCreatePlayer(params.sessionToken, campaign.id)
+  );
+  if (!player) {
+    return { ok: false, error: "no_player", message: "Could not load player." };
+  }
   const devReplay = devAllowReplay();
 
   if (!devReplay && player.status !== "new") {
@@ -83,14 +138,6 @@ export async function claimKernel(params: {
       ok: false,
       error: "already_played",
       message: "You have already played. One play per person.",
-    };
-  }
-
-  if (devReplay && player.status === "winner_pending") {
-    return {
-      ok: false,
-      error: "complete_pending_win",
-      message: "Complete your prize claim before playing again.",
     };
   }
 
@@ -241,6 +288,11 @@ export async function completeClaim(params: {
     return { ok: false, error: "invalid_phone", message: "Please enter a valid US phone number." };
   }
 
+  const claimPreview = await sqlGet<ClaimRow>(`SELECT * FROM claims WHERE id = ?`, [params.claimId]);
+  if (claimPreview?.campaign_id) {
+    await releaseExpiredPendingWins(claimPreview.campaign_id);
+  }
+
   const player = await sqlGet<PlayerRow>(
     `SELECT * FROM players WHERE session_token = ?`,
     [params.sessionToken]
@@ -342,6 +394,8 @@ export async function completeClaim(params: {
 }
 
 export async function getKernelState(campaignId: string) {
+  await releaseExpiredPendingWins(campaignId);
+
   const claimed = await sqlAll<Pick<KernelRow, "id" | "row" | "col" | "status">>(
     `SELECT id, row, col, status FROM kernels
      WHERE campaign_id = ? AND status = 'claimed'`,
@@ -361,7 +415,72 @@ export async function getPlayerState(sessionToken: string) {
     `SELECT * FROM players WHERE session_token = ?`,
     [sessionToken]
   );
-  return player ?? null;
+  return syncDevReplayPlayer(player ?? null);
+}
+
+export async function releaseExpiredPendingWins(campaignId: string): Promise<number> {
+  if (devAllowReplay()) return 0;
+
+  const cutoff = new Date(Date.now() - UNCLAIMED_WIN_TIMEOUT_MS).toISOString();
+  const expired = await sqlAll<ClaimRow>(
+    `SELECT * FROM claims
+     WHERE campaign_id = ? AND outcome = 'win' AND status = 'pending'
+     AND voided = 0 AND created_at < ?`,
+    [campaignId, cutoff]
+  );
+
+  let released = 0;
+
+  for (const claim of expired) {
+    const didRelease = await withTransaction(async (tx) => {
+      const current = await tx.get<ClaimRow>(
+        `SELECT * FROM claims WHERE id = ? AND status = 'pending' AND voided = 0`,
+        [claim.id]
+      );
+      if (!current) return false;
+
+      const kernelUpdate = await tx.run(
+        `UPDATE kernels
+         SET status = 'available', claimed_at = NULL, claimed_by_player_id = NULL
+         WHERE id = ? AND status = 'claimed' AND campaign_id = ?`,
+        [claim.kernel_id, campaignId]
+      );
+
+      if (kernelUpdate.rowsAffected === 0) return false;
+
+      if (claim.prize_id) {
+        await tx.run(
+          `UPDATE prizes
+           SET quantity_remaining = MIN(quantity_remaining + 1, quantity_total)
+           WHERE id = ?`,
+          [claim.prize_id]
+        );
+      }
+
+      await tx.run(
+        `UPDATE claims SET status = 'expired', voided = 1 WHERE id = ?`,
+        [claim.id]
+      );
+
+      await tx.run(
+        `UPDATE players SET status = 'finished', pending_claim_id = NULL
+         WHERE id = ? AND pending_claim_id = ?`,
+        [claim.player_id, claim.id]
+      );
+
+      return true;
+    });
+
+    if (didRelease) {
+      released += 1;
+      await auditLog("claim_expired", campaignId, claim.player_id, {
+        claimId: claim.id,
+        kernelId: claim.kernel_id,
+      });
+    }
+  }
+
+  return released;
 }
 
 export async function getKernelsForCampaign(campaignId: string): Promise<KernelRow[]> {

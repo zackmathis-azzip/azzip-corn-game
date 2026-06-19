@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "./TurnstileWidget";
 
 type Props = {
   claimId: string;
@@ -10,49 +11,31 @@ type Props = {
   onError: (message: string) => void;
 };
 
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (
-        el: HTMLElement,
-        opts: { sitekey: string; callback: (token: string) => void }
-      ) => string;
-      reset: (id: string) => void;
-    };
-  }
-}
-
 export function WinForm({ claimId, prizeLabel, turnstileSiteKey, onSuccess, onError }: Props) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState("");
-  const turnstileRef = useRef<HTMLDivElement>(null);
-  const widgetId = useRef<string | null>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 
-  useEffect(() => {
-    if (!turnstileSiteKey || !turnstileRef.current) return;
-
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.onload = () => {
-      if (window.turnstile && turnstileRef.current && !widgetId.current) {
-        widgetId.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: turnstileSiteKey,
-          callback: (token: string) => setTurnstileToken(token),
-        });
-      }
-    };
-    document.body.appendChild(script);
-    return () => {
-      script.remove();
-    };
-  }, [turnstileSiteKey]);
+  const needsTurnstile = Boolean(turnstileSiteKey);
+  const canSubmit = consent && (!needsTurnstile || Boolean(turnstileToken));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setFormError(null);
+
+    if (!canSubmit) {
+      setFormError(
+        needsTurnstile && !turnstileToken
+          ? "Please complete verification below before claiming."
+          : "Please agree to the terms to continue."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -70,17 +53,19 @@ export function WinForm({ claimId, prizeLabel, turnstileSiteKey, onSuccess, onEr
 
       const data = await res.json();
       if (!res.ok) {
-        onError(data.message ?? "Could not complete claim.");
-        if (widgetId.current && window.turnstile) {
-          window.turnstile.reset(widgetId.current);
-          setTurnstileToken("");
-        }
+        const message = data.message ?? "Could not complete claim.";
+        setFormError(message);
+        onError(message);
+        turnstileRef.current?.reset();
+        setTurnstileToken("");
         return;
       }
 
       onSuccess("Prize claimed! We'll be in touch soon.");
     } catch {
-      onError("Network error. Please try again.");
+      const message = "Network error. Please try again.";
+      setFormError(message);
+      onError(message);
     } finally {
       setLoading(false);
     }
@@ -88,12 +73,20 @@ export function WinForm({ claimId, prizeLabel, turnstileSiteKey, onSuccess, onEr
 
   return (
     <form onSubmit={handleSubmit} className="win-form">
-      <p className="win-prize">You won: <strong>{prizeLabel}</strong></p>
+      <p className="win-prize">
+        You won: <strong>{prizeLabel}</strong>
+      </p>
       <p className="win-copy">
         Enter your contact info to claim your prize. One play per person. Prize will be delivered by the
         end of the promotion to your Creator Rewards wallet. If you don&apos;t have a Creator Rewards
         account, it may be created on your behalf.
       </p>
+
+      {formError && (
+        <p className="win-form-error" role="alert">
+          {formError}
+        </p>
+      )}
 
       <label className="form-label">
         Email
@@ -141,9 +134,25 @@ export function WinForm({ claimId, prizeLabel, turnstileSiteKey, onSuccess, onEr
         </span>
       </label>
 
-      {turnstileSiteKey && <div ref={turnstileRef} className="turnstile-wrap" />}
+      {turnstileSiteKey && (
+        <>
+          <TurnstileWidget
+            ref={turnstileRef}
+            siteKey={turnstileSiteKey}
+            onToken={(token) => {
+              setTurnstileToken(token);
+              setFormError(null);
+            }}
+            onExpire={() => setTurnstileToken("")}
+            className="turnstile-wrap"
+          />
+          {!turnstileToken && (
+            <p className="turnstile-hint">Complete verification to enable Claim Prize.</p>
+          )}
+        </>
+      )}
 
-      <button type="submit" className="btn-primary" disabled={loading || !consent}>
+      <button type="submit" className="btn-primary" disabled={loading || !canSubmit}>
         {loading ? "Submitting…" : "Claim Prize"}
       </button>
     </form>

@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { completeClaim } from "@/lib/game";
+import { clientIp } from "@/lib/client-ip";
+import { devAllowReplay } from "@/lib/config";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getSessionToken } from "@/lib/session";
 import { verifyTurnstile } from "@/lib/turnstile";
 
 export const runtime = "nodejs";
-
-function clientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
 
 export async function POST(request: NextRequest) {
   const sessionToken = await getSessionToken();
@@ -46,10 +40,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   }
 
-  const turnstileOk = await verifyTurnstile(body.turnstileToken ?? "", ip);
+  const turnstileOk =
+    devAllowReplay() || (await verifyTurnstile(body.turnstileToken ?? "", ip));
   if (!turnstileOk) {
     return NextResponse.json(
-      { error: "captcha_failed", message: "CAPTCHA verification failed." },
+      { error: "captcha_failed", message: "Please complete verification before claiming." },
       { status: 400 }
     );
   }

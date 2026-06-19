@@ -77,6 +77,10 @@ const SCHEMA_STATEMENTS = [
   ON claims(email_normalized) WHERE outcome = 'win' AND status = 'completed'`,
   `CREATE INDEX IF NOT EXISTS idx_claims_phone_win
   ON claims(phone_e164) WHERE outcome = 'win' AND status = 'completed'`,
+  `CREATE INDEX IF NOT EXISTS idx_claims_pending_win
+  ON claims(campaign_id, outcome, status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_claims_ip_campaign_created
+  ON claims(ip, campaign_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_kernels_campaign_status
   ON kernels(campaign_id, status)`,
   `CREATE INDEX IF NOT EXISTS idx_players_session

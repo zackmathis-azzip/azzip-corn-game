@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CornGrid, type KernelCell } from "./CornGrid";
 import { Modal } from "./Modal";
 import { WinForm } from "./WinForm";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "./TurnstileWidget";
 import { POLL_INTERVAL_MS } from "@/lib/config";
 
 type CampaignInfo = {
@@ -20,19 +21,23 @@ type ModalState =
 
 type Props = {
   turnstileSiteKey: string | null;
+  devReplayEnabled?: boolean;
 };
 
-export function CornGame({ turnstileSiteKey }: Props) {
+export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) {
   const [campaign, setCampaign] = useState<CampaignInfo | null>(null);
   const [kernels, setKernels] = useState<KernelCell[]>([]);
   const [claimedIds, setClaimedIds] = useState<Set<string>>(new Set());
   const [playerStatus, setPlayerStatus] = useState<string | null>(null);
   const [prizesRemaining, setPrizesRemaining] = useState<number | null>(null);
-  const [devAllowReplay, setDevAllowReplay] = useState(false);
+  const [devAllowReplay, setDevAllowReplay] = useState(devReplayEnabled);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ type: "none" });
   const [bootLoading, setBootLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [devPreviewCompletedBoard, setDevPreviewCompletedBoard] = useState(false);
+  const playTurnstileRef = useRef<TurnstileWidgetHandle>(null);
 
   const mustCompleteWin = playerStatus === "winner_pending";
   const hasPlayed =
@@ -41,6 +46,17 @@ export function CornGame({ turnstileSiteKey }: Props) {
       playerStatus === "winner_pending" ||
       playerStatus === "winner_claimed");
   const playBlocked = mustCompleteWin || hasPlayed;
+  const needsTurnstile =
+    Boolean(turnstileSiteKey) &&
+    campaign?.status === "active" &&
+    !playBlocked &&
+    !devAllowReplay;
+  const turnstileReady = !needsTurnstile || Boolean(turnstileToken);
+
+  const resetPlayTurnstile = useCallback(() => {
+    playTurnstileRef.current?.reset();
+    setTurnstileToken("");
+  }, []);
 
   const refreshState = useCallback(async (campaignId: string, full = false) => {
     const url = full
@@ -58,20 +74,31 @@ export function CornGame({ turnstileSiteKey }: Props) {
     }
     if (typeof data.devAllowReplay === "boolean") {
       setDevAllowReplay(data.devAllowReplay);
+    } else if (devReplayEnabled) {
+      setDevAllowReplay(true);
     }
 
     if (full && data.kernels) {
       setKernels(data.kernels);
     }
 
-    if (data.playerStatus === "winner_pending" && data.pendingClaimId) {
+    if (data.playerStatus === "winner_pending" && data.pendingClaimId && !data.devAllowReplay) {
       setModal((m) =>
         m.type === "win"
           ? m
           : { type: "win", claimId: data.pendingClaimId, prizeLabel: "Your prize" }
       );
+    } else if (data.playerStatus !== "winner_pending" && !data.devAllowReplay) {
+      setModal((m) => {
+        if (m.type !== "win") return m;
+        return {
+          type: "message",
+          title: "Claim window ended",
+          body: "Your prize claim time expired and the kernel returned to the pool. Thanks for playing!",
+        };
+      });
     }
-  }, []);
+  }, [devReplayEnabled]);
 
   useEffect(() => {
     async function boot() {
@@ -101,7 +128,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
   }, [campaign, refreshState]);
 
   async function handleKernelClick(kernelId: string) {
-    if (playBlocked || loadingId) return;
+    if (playBlocked || loadingId || !turnstileReady) return;
 
     setLoadingId(kernelId);
     setError(null);
@@ -109,6 +136,10 @@ export function CornGame({ turnstileSiteKey }: Props) {
     try {
       const res = await fetch(`/api/kernels/${encodeURIComponent(kernelId)}/claim`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          turnstileToken: turnstileToken || undefined,
+        }),
       });
       const data = await res.json();
 
@@ -122,14 +153,27 @@ export function CornGame({ turnstileSiteKey }: Props) {
           setPlayerStatus("finished");
         } else if (data.error === "complete_pending_win") {
           setError(data.message ?? "Complete your prize claim before playing again.");
+        } else if (data.error === "captcha_failed") {
+          setError(data.message ?? "Please complete verification before playing.");
+          resetPlayTurnstile();
+        } else if (data.error === "ip_limit_exceeded") {
+          setModal({
+            type: "message",
+            title: "Play Limit Reached",
+            body: data.message ?? "Too many plays from your network. Please try again later.",
+          });
         } else if (data.error === "kernel_taken") {
           setError(data.message ?? "That kernel was just taken.");
+          resetPlayTurnstile();
           if (campaign) await refreshState(campaign.id, false);
         } else {
           setError(data.message ?? "Something went wrong.");
+          resetPlayTurnstile();
         }
         return;
       }
+
+      setTurnstileToken("");
 
       setClaimedIds((prev) => new Set(prev).add(kernelId));
 
@@ -143,6 +187,7 @@ export function CornGame({ turnstileSiteKey }: Props) {
       } else {
         setPlayerStatus(devAllowReplay ? "new" : "finished");
         setModal({ type: "lose" });
+        if (devAllowReplay) resetPlayTurnstile();
       }
 
       if (campaign) await refreshState(campaign.id, false);
@@ -188,9 +233,17 @@ export function CornGame({ turnstileSiteKey }: Props) {
           </p>
         )}
         {devAllowReplay && (
-          <p className="dev-mode-banner" role="status">
-            Dev mode: unlimited test plays enabled
-          </p>
+          <div className="dev-mode-banner" role="status">
+            <p>Dev mode: unlimited test plays enabled</p>
+            <button
+              type="button"
+              className="dev-mode-toggle"
+              aria-pressed={devPreviewCompletedBoard}
+              onClick={() => setDevPreviewCompletedBoard((on) => !on)}
+            >
+              {devPreviewCompletedBoard ? "Show live board" : "Preview completed board"}
+            </button>
+          </div>
         )}
         {hasPlayed && playerStatus !== "winner_pending" && (
           <p className="played-banner" role="status">
@@ -202,13 +255,35 @@ export function CornGame({ turnstileSiteKey }: Props) {
             {error}
           </p>
         )}
+        {needsTurnstile && !turnstileToken && (
+          <p className="turnstile-hint" role="status">
+            Complete verification below to pick a kernel.
+          </p>
+        )}
       </header>
+
+      {needsTurnstile && (
+        <TurnstileWidget
+          ref={playTurnstileRef}
+          siteKey={turnstileSiteKey!}
+          onToken={setTurnstileToken}
+          onExpire={resetPlayTurnstile}
+          className="turnstile-wrap play-turnstile"
+        />
+      )}
 
       <CornGrid
         kernels={kernels}
         claimedIds={claimedIds}
-        disabled={mustCompleteWin || campaign.status !== "active"}
+        disabled={
+          devPreviewCompletedBoard ||
+          mustCompleteWin ||
+          campaign.status !== "active" ||
+          playBlocked ||
+          !turnstileReady
+        }
         loadingId={loadingId}
+        previewAllClaimed={devPreviewCompletedBoard}
         onKernelClick={handleKernelClick}
       />
 
@@ -251,8 +326,9 @@ export function CornGame({ turnstileSiteKey }: Props) {
             prizeLabel={modal.prizeLabel}
             turnstileSiteKey={turnstileSiteKey}
             onSuccess={(msg) => {
-              setPlayerStatus("winner_claimed");
+              setPlayerStatus(devAllowReplay ? "new" : "winner_claimed");
               setModal({ type: "message", title: "Prize claimed!", body: msg });
+              if (devAllowReplay) resetPlayTurnstile();
             }}
             onError={(msg) => setError(msg)}
           />
