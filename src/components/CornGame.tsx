@@ -105,7 +105,13 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
           ? m
           : { type: "win", claimId: data.pendingClaimId, prizeLabel: "Your prize" }
       );
-    } else if (data.playerStatus !== "winner_pending" && !data.devAllowReplay) {
+    } else if (
+      (data.playerStatus === "finished" || data.playerStatus === "winner_claimed") &&
+      !data.devAllowReplay
+    ) {
+      // Only close a live win modal when the server confirms a terminal state.
+      // A null/"new" status (e.g. cookies blocked or replica lag) must NOT be
+      // mistaken for an expired claim, or we'd wrongly nuke a legitimate win.
       setModal((m) => {
         if (m.type !== "win") return m;
         return {
