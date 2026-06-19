@@ -38,6 +38,26 @@ export function kernelColor(row: number, col: number, seed: number): string {
   return toHex(r, g, b);
 }
 
+const HUSK_GREENS = [
+  { r: 0x2f, g: 0x5a, b: 0x28 },
+  { r: 0x3d, g: 0x6b, b: 0x35 },
+  { r: 0x4a, g: 0x7c, b: 0x42 },
+  { r: 0x5c, g: 0x8f, b: 0x4f },
+  { r: 0x6a, g: 0x9e, b: 0x5a },
+];
+
+/** Green husk fill — stable per cell, varied shade. */
+export function huskColor(row: number, col: number, seed: number): string {
+  const raw = seededRandom(seed ^ 0x9e3779b9, row, col);
+  const idx = Math.min(HUSK_GREENS.length - 1, Math.floor(raw * HUSK_GREENS.length));
+  const shade = HUSK_GREENS[idx];
+  const jitter = (seededRandom(seed, col, row) - 0.5) * 16;
+  const r = Math.max(0, Math.min(255, shade.r + jitter));
+  const g = Math.max(0, Math.min(255, shade.g + jitter * 0.6));
+  const b = Math.max(0, Math.min(255, shade.b + jitter * 0.4));
+  return toHex(Math.round(r), Math.round(g), Math.round(b));
+}
+
 export function kernelId(campaignId: string, row: number, col: number): string {
   return `${campaignId}-r${row}c${col}`;
 }

@@ -10,6 +10,8 @@ import {
   SPONSOR_AZZIP_LOGO_URL,
   SPONSOR_OLD_MAJOR_LOGO_URL,
 } from "@/lib/config";
+import { getHuskCells } from "@/lib/cob-mask";
+import { huskColor } from "@/lib/kernel-colors";
 
 export type KernelCell = {
   id: string;
@@ -29,6 +31,10 @@ type Props = {
   disabled: boolean;
   loadingId: string | null;
   onKernelClick: (kernelId: string) => void;
+  /** Clicking any green husk fires this (no prize, infinitely reusable) */
+  onHuskClick?: () => void;
+  /** Campaign seed for stable husk shading */
+  campaignSeed?: number;
   /** Dev only: render every kernel as claimed for layout preview */
   previewAllClaimed?: boolean;
 };
@@ -39,12 +45,16 @@ export function CornGrid({
   disabled,
   loadingId,
   onKernelClick,
+  onHuskClick,
+  campaignSeed = 0,
   previewAllClaimed = false,
 }: Props) {
   const activeKernels = useMemo(
     () => kernels.filter((k) => k.active),
     [kernels]
   );
+  const huskDesktop = useMemo(() => getHuskCells("desktop"), []);
+  const huskMobile = useMemo(() => getHuskCells("mobile"), []);
 
   return (
     <div
@@ -81,6 +91,34 @@ export function CornGrid({
           </div>
         </div>
         <div className="corn-grid" role="grid" aria-label="Corn kernel game board">
+          {huskDesktop.map((husk) => (
+            <button
+              key={`husk-d-${husk.leaf}-${husk.row}-${husk.col}`}
+              type="button"
+              className={`corn-husk corn-husk-set--desktop corn-husk--${husk.leaf} corn-husk--depth-${husk.depth}`}
+              style={{
+                gridRow: husk.row + 1,
+                gridColumn: husk.col + 1,
+                backgroundColor: huskColor(husk.row, husk.col, campaignSeed),
+              }}
+              aria-label="Corn husk"
+              onClick={onHuskClick}
+            />
+          ))}
+          {huskMobile.map((husk) => (
+            <button
+              key={`husk-m-${husk.leaf}-${husk.row}-${husk.col}`}
+              type="button"
+              className={`corn-husk corn-husk-set--mobile corn-husk--${husk.leaf} corn-husk--depth-${husk.depth}`}
+              style={{
+                gridRow: husk.row + 1,
+                gridColumn: husk.col + 1,
+                backgroundColor: huskColor(husk.row, husk.col, campaignSeed),
+              }}
+              aria-label="Corn husk"
+              onClick={onHuskClick}
+            />
+          ))}
           {activeKernels.map((kernel) => {
             const isClaimed =
               previewAllClaimed || claimedIds.has(kernel.id) || kernel.status === "claimed";

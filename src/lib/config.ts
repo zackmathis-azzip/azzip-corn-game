@@ -1,9 +1,9 @@
-export const GRID_COLS = 58;
+export const GRID_COLS = 67;
 export const GRID_ROWS = 29;
 export const KERNEL_WIDTH = 30;
 export const KERNEL_HEIGHT = 38;
 export const KERNEL_BORDER_RADIUS = 8;
-export const GRID_WIDTH = GRID_COLS * KERNEL_WIDTH; // 1740
+export const GRID_WIDTH = GRID_COLS * KERNEL_WIDTH; // 2010
 export const GRID_HEIGHT = GRID_ROWS * KERNEL_HEIGHT; // 1102
 
 /** Verified Resend sender — do not use noreply@azzippizza.com (unverified). */

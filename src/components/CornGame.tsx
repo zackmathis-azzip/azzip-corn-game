@@ -6,18 +6,35 @@ import { Modal } from "./Modal";
 import { WinForm } from "./WinForm";
 import { TurnstileWidget, type TurnstileWidgetHandle } from "./TurnstileWidget";
 import { POLL_INTERVAL_MS } from "@/lib/config";
+import { randomHuskMessage } from "@/lib/husk-messages";
 
 type CampaignInfo = {
   id: string;
   name: string;
   status: string;
+  seed?: number;
 };
 
 type ModalState =
   | { type: "none" }
   | { type: "win"; claimId: string; prizeLabel: string }
   | { type: "lose" }
-  | { type: "message"; title: string; body: string };
+  | { type: "message"; title: string; body: string }
+  | { type: "husk"; body: string };
+
+/** Turn bare azzippizza.com URLs in husk messages into clickable links. */
+function renderWithLinks(text: string): React.ReactNode {
+  const parts = text.split(/(\b(?:order|rewards)\.azzippizza\.com\b)/g);
+  return parts.map((part, i) =>
+    /^(?:order|rewards)\.azzippizza\.com$/.test(part) ? (
+      <a key={i} href={`https://${part}`} target="_blank" rel="noopener noreferrer">
+        {part}
+      </a>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
 
 type Props = {
   turnstileSiteKey: string | null;
@@ -126,6 +143,12 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
     const id = setInterval(() => refreshState(campaign.id, false), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [campaign, refreshState]);
+
+  function handleHuskClick() {
+    const canStillPickKernel =
+      !playBlocked && campaign?.status === "active" && !devPreviewCompletedBoard;
+    setModal({ type: "husk", body: randomHuskMessage(canStillPickKernel) });
+  }
 
   async function handleKernelClick(kernelId: string) {
     if (playBlocked || loadingId || !turnstileReady) return;
@@ -284,7 +307,9 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
         }
         loadingId={loadingId}
         previewAllClaimed={devPreviewCompletedBoard}
+        campaignSeed={campaign.seed ?? 0}
         onKernelClick={handleKernelClick}
+        onHuskClick={handleHuskClick}
       />
 
       <footer className="play-footer">
@@ -298,7 +323,8 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
         title="You Corn't win em all, but thanks for playing!"
         onClose={() => setModal({ type: "none" })}
       >
-        <p>That kernel wasn&apos;t a winner. Thanks for playing Azzip!</p>
+        <p>Aww, shucks! That kernel wasn&apos;t a winner.</p>
+        <br></br>
         <button type="button" className="btn-primary" onClick={() => setModal({ type: "none" })}>
           OK
         </button>
@@ -314,6 +340,26 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
             <p>{modal.body}</p>
             <button type="button" className="btn-primary" onClick={() => setModal({ type: "none" })}>
               OK
+            </button>
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        open={modal.type === "husk"}
+        title="A word from the husk 🌽"
+        onClose={() => setModal({ type: "none" })}
+      >
+        {modal.type === "husk" && (
+          <>
+            <p>{renderWithLinks(modal.body)}</p>
+            <br />
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setModal({ type: "none" })}
+            >
+              Back to the corn
             </button>
           </>
         )}

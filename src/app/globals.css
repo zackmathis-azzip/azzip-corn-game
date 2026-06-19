@@ -31,6 +31,8 @@ a {
   align-items: center;
   padding: 1rem;
   gap: 1rem;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .play-header {
@@ -113,16 +115,25 @@ a {
   width: 100%;
   display: flex;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   flex: 1;
   --grid-w: calc(var(--cols) * var(--kw));
   --grid-h: calc(var(--rows) * var(--kh));
+  --husk-pad-top: calc(var(--kh) * 0.45);
+  --husk-pad-left: calc(var(--kw) * 0.58);
+  --husk-pad-bottom: calc(var(--kh) * 0.18);
+  --husk-pad-right: calc(var(--kw) * 0.58);
+  --canvas-w: calc(var(--grid-w) + var(--husk-pad-left) + var(--husk-pad-right));
+  --canvas-h: calc(var(--grid-h) + var(--husk-pad-top) + var(--husk-pad-bottom));
 }
 
 .corn-canvas {
   position: relative;
-  width: var(--grid-w);
-  height: var(--grid-h);
+  box-sizing: border-box;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  padding: var(--husk-pad-top) var(--husk-pad-right) var(--husk-pad-bottom) var(--husk-pad-left);
+  overflow: visible;
 }
 
 .corn-sponsors {
@@ -192,17 +203,124 @@ a {
   grid-template-rows: repeat(var(--rows), var(--kh));
   width: var(--grid-w);
   height: var(--grid-h);
+  overflow: visible;
+}
+
+.corn-husk {
+  width: var(--kw);
+  height: var(--kh);
+  border: 1px solid #000;
+  border-radius: var(--radius);
+  padding: 0;
+  margin: 0;
+  appearance: none;
+  cursor: pointer;
+  z-index: 0;
+  transform-origin: center center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: filter 0.15s ease;
+}
+
+.corn-husk:hover {
+  filter: brightness(1.12);
+  z-index: 2;
+}
+
+.corn-husk-set--mobile {
+  display: none;
+}
+
+/* Desktop left arc — peel away from cob */
+.corn-husk-set--desktop.corn-husk--back.corn-husk--depth-1 {
+  transform: rotate(-8deg) translateX(-16%);
+}
+
+.corn-husk-set--desktop.corn-husk--back.corn-husk--depth-2 {
+  transform: rotate(-14deg) translateX(-24%);
+}
+
+.corn-husk-set--desktop.corn-husk--back.corn-husk--depth-3 {
+  transform: rotate(-20deg) translateX(-32%);
+}
+
+.corn-husk-set--desktop.corn-husk--back.corn-husk--depth-4 {
+  transform: rotate(-26deg) translateX(-40%);
+}
+
+.corn-husk-set--desktop.corn-husk--top.corn-husk--depth-1 {
+  transform: rotate(-18deg) translate(-10%, -16%);
+}
+
+.corn-husk-set--desktop.corn-husk--top.corn-husk--depth-2 {
+  transform: rotate(-28deg) translate(-16%, -24%);
+}
+
+.corn-husk-set--desktop.corn-husk--top.corn-husk--depth-3 {
+  transform: rotate(-36deg) translate(-22%, -32%);
+}
+
+.corn-husk-set--desktop.corn-husk--bottom.corn-husk--depth-1 {
+  transform: rotate(18deg) translate(-10%, 16%);
+}
+
+.corn-husk-set--desktop.corn-husk--bottom.corn-husk--depth-2 {
+  transform: rotate(28deg) translate(-16%, 24%);
+}
+
+.corn-husk-set--desktop.corn-husk--bottom.corn-husk--depth-3 {
+  transform: rotate(36deg) translate(-22%, 32%);
+}
+
+/* Mobile right arc (90° canvas → screen bottom) — mirror curls, tighter spacing */
+.corn-husk-set--mobile.corn-husk--back.corn-husk--depth-1 {
+  transform: rotate(8deg) translateX(16%);
+}
+
+.corn-husk-set--mobile.corn-husk--back.corn-husk--depth-2 {
+  transform: rotate(14deg) translateX(24%);
+}
+
+.corn-husk-set--mobile.corn-husk--back.corn-husk--depth-3 {
+  transform: rotate(20deg) translateX(32%);
+}
+
+.corn-husk-set--mobile.corn-husk--back.corn-husk--depth-4 {
+  transform: rotate(26deg) translateX(40%);
+}
+
+.corn-husk-set--mobile.corn-husk--top.corn-husk--depth-1 {
+  transform: rotate(18deg) translate(10%, -16%);
+}
+
+.corn-husk-set--mobile.corn-husk--top.corn-husk--depth-2 {
+  transform: rotate(28deg) translate(16%, -24%);
+}
+
+.corn-husk-set--mobile.corn-husk--top.corn-husk--depth-3 {
+  transform: rotate(36deg) translate(22%, -32%);
+}
+
+.corn-husk-set--mobile.corn-husk--bottom.corn-husk--depth-1 {
+  transform: rotate(-18deg) translate(10%, 16%);
+}
+
+.corn-husk-set--mobile.corn-husk--bottom.corn-husk--depth-2 {
+  transform: rotate(-28deg) translate(16%, 24%);
+}
+
+.corn-husk-set--mobile.corn-husk--bottom.corn-husk--depth-3 {
+  transform: rotate(-36deg) translate(22%, 32%);
 }
 
 @media (orientation: landscape), (min-width: 900px) {
   .corn-stage {
     --desktop-scale: min(
       1,
-      calc(80vw / var(--grid-w)),
-      calc((100dvh - 220px) / var(--grid-h))
+      calc(80vw / var(--canvas-w)),
+      calc((100dvh - 220px) / var(--canvas-h))
     );
-    width: calc(var(--grid-w) * var(--desktop-scale));
-    height: calc(var(--grid-h) * var(--desktop-scale));
+    width: calc(var(--canvas-w) * var(--desktop-scale));
+    height: calc(var(--canvas-h) * var(--desktop-scale));
   }
 
   .corn-canvas {
@@ -230,13 +348,13 @@ a {
 
   .corn-stage {
     --mobile-scale: min(
-      calc(92vw / var(--grid-h)),
-      calc((100dvh - 200px) / var(--grid-w))
+      calc(92vw / var(--canvas-h)),
+      calc((100dvh - 200px) / var(--canvas-w))
     );
     flex: 0 0 auto;
     position: relative;
-    width: calc(var(--grid-h) * var(--mobile-scale));
-    height: calc(var(--grid-w) * var(--mobile-scale));
+    width: calc(var(--canvas-h) * var(--mobile-scale));
+    height: calc(var(--canvas-w) * var(--mobile-scale));
     margin-inline: auto;
   }
 
@@ -259,6 +377,14 @@ a {
     left: 71%;
     width: 40%;
     height: 36%;
+  }
+
+  .corn-husk-set--desktop {
+    display: none;
+  }
+
+  .corn-husk-set--mobile {
+    display: block;
   }
 
   .corn-sponsor-logo--azzip,
