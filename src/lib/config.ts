@@ -42,6 +42,8 @@ export const SPONSOR_AZZIP_LOGO_URL =
   "https://azzippizza.com/wp-content/themes/azzip/assets/img/logo-alt.svg";
 /** Wordmark with keyed transparency (scripts/process-old-major-wordmark.mjs) */
 export const SPONSOR_OLD_MAJOR_LOGO_URL = "/sponsors/old-major-wordmark.png";
+/** Red-on-black source for timeline SVG chroma-key filter */
+export const SPONSOR_OLD_MAJOR_TIMELINE_URL = "/sponsors/old-major-transparent.png";
 
 /** Server-only: allow unlimited plays per session for QA (never enable in production). */
 export function devAllowReplay(): boolean {

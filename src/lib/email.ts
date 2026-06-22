@@ -35,7 +35,7 @@ function buildWinnerEmailContent(params: {
   const endDate = formatPromotionEndDate(params.promotionEndsAt);
   const subject = `You won from Azzip Pizza — ${params.prizeLabel}`;
 
-  const text = `Thanks for playing the Azzip Corn Kernel Game!
+  const text = `This email got lost in the corn maze, but it's finally made it to your inbox! Thanks again for playing, and keep an eye out for your prize!
 
 Your prize: ${params.prizeLabel}
 
@@ -53,7 +53,7 @@ Questions? Reply to this email and our team will help.
   const html = `<!DOCTYPE html>
 <html>
 <body style="font-family: system-ui, sans-serif; color: #1a1208; line-height: 1.5;">
-  <p>Thanks for playing the <strong>Azzip Corn Kernel Game</strong>!</p>
+  <p>This email got lost in the corn maze, but it's finally made it to your inbox! Thanks again for playing, and keep an eye out for your prize!</p>
   <p><strong>Your prize:</strong> ${params.prizeLabel}</p>
   <h3 style="margin-bottom: 0.5rem;">What happens next</h3>
   <ul>

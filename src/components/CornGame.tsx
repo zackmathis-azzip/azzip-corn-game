@@ -270,6 +270,12 @@ export function CornGame({ turnstileSiteKey, devReplayEnabled = false }: Props) 
             remain!
           </p>
         )}
+        {prizesRemaining === 0 && (
+          <p className="timeline-promo">
+            Want to see how the picks went down?{" "}
+            <a href="/timeline">Check out the timeline here!</a>
+          </p>
+        )}
         {devAllowReplay && (
           <div className="dev-mode-banner" role="status">
             <p>Dev mode: unlimited test plays enabled</p>
