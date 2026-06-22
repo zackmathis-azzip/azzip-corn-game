@@ -147,6 +147,9 @@ export default function AdminPage() {
             >
               Export Winners CSV
             </a>
+            <a className="btn-secondary" href="/admin/winner-emails">
+              Winner Emails
+            </a>
           </>
         )}
       </div>

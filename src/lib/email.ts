@@ -17,22 +17,11 @@ export function normalizeEmail(email: string): string | null {
   return trimmed;
 }
 
-function formatPromotionEndDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "America/Indiana/Indianapolis",
-  });
-}
-
 function buildWinnerEmailContent(params: {
   prizeLabel: string;
   phoneE164: string;
-  promotionEndsAt: string;
 }): { subject: string; text: string; html: string } {
   const phoneDisplay = formatPhoneForDisplay(params.phoneE164);
-  const endDate = formatPromotionEndDate(params.promotionEndsAt);
   const subject = `You won from Azzip Pizza — ${params.prizeLabel}`;
 
   const text = `This email got lost in the corn maze, but it's finally made it to your inbox! Thanks again for playing, and keep an eye out for your prize!
@@ -41,7 +30,7 @@ Your prize: ${params.prizeLabel}
 
 What happens next:
 - Your prize will be delivered to your Creator Rewards wallet.
-- Delivery is expected by the end of the promotion (${endDate}).
+- Delivery is expected by the end of June 23, 2026.
 - If you do not already have a Creator Rewards account, one may be created for the phone number on file.
 
 Phone number on your claim: ${phoneDisplay}
@@ -58,7 +47,7 @@ Questions? Reply to this email and our team will help.
   <h3 style="margin-bottom: 0.5rem;">What happens next</h3>
   <ul>
     <li>Your prize will be delivered to your <strong>Creator Rewards wallet</strong>.</li>
-    <li>Delivery is expected by the end of the promotion (<strong>${endDate}</strong>).</li>
+    <li>Delivery is expected by the end of June 23, 2026.</li>
     <li>If you do not already have a Creator Rewards account, one may be created for the phone number on file.</li>
   </ul>
   <p><strong>Phone number on your claim:</strong> ${phoneDisplay}</p>
@@ -70,6 +59,13 @@ Questions? Reply to this email and our team will help.
   return { subject, text, html };
 }
 
+export function getWinnerEmailPreview(params: {
+  prizeLabel: string;
+  phoneE164: string;
+}): { subject: string; text: string; html: string } {
+  return buildWinnerEmailContent(params);
+}
+
 export async function sendWinnerConfirmationEmail(params: {
   toEmail: string;
   phoneE164: string;
@@ -78,12 +74,15 @@ export async function sendWinnerConfirmationEmail(params: {
 }): Promise<{ sent: boolean; method: "resend" | "console" }> {
   const apiKey = process.env.RESEND_API_KEY;
   const replyTo = process.env.RESEND_REPLY_TO ?? FULFILLMENT_EMAIL;
-  const { subject, text, html } = buildWinnerEmailContent(params);
+  const { subject, text, html } = buildWinnerEmailContent({
+    prizeLabel: params.prizeLabel,
+    phoneE164: params.phoneE164,
+  });
 
   if (apiKey) {
     const resend = new Resend(apiKey);
     const from = resolveResendFrom();
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from,
       to: params.toEmail,
       cc: [FULFILLMENT_EMAIL],
@@ -92,6 +91,9 @@ export async function sendWinnerConfirmationEmail(params: {
       text,
       html,
     });
+    if (error) {
+      throw new Error(error.message ?? "Resend rejected the email");
+    }
     return { sent: true, method: "resend" };
   }
 

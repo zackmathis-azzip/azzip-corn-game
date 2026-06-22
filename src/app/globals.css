@@ -636,6 +636,133 @@ a {
   font-size: 1.1rem;
 }
 
+.winner-emails-shell {
+  max-width: 72rem;
+}
+
+.winner-emails-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.winner-emails-subtitle {
+  margin: 0.35rem 0 0;
+  opacity: 0.85;
+  max-width: 40rem;
+}
+
+.winner-emails-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.winner-emails-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.winner-emails-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .winner-emails-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.winner-emails-list {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.winner-emails-select {
+  background: none;
+  border: none;
+  color: var(--azzip-yellow);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.winner-emails-row--selected {
+  background: rgba(255, 219, 0, 0.08);
+}
+
+.winner-emails-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.winner-emails-badge--pending {
+  background: rgba(255, 219, 0, 0.2);
+  color: var(--azzip-yellow);
+}
+
+.winner-emails-badge--sent {
+  background: rgba(45, 90, 39, 0.35);
+  color: #b8e0b3;
+}
+
+.winner-emails-badge--void {
+  background: rgba(120, 40, 40, 0.35);
+  color: #f0b0b0;
+}
+
+.winner-emails-preview h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.75rem;
+  color: var(--azzip-yellow);
+}
+
+.winner-emails-notified {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.winner-emails-preview-frame-wrap {
+  margin: 1rem 0;
+  border: 1px solid rgba(255, 219, 0, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.winner-emails-preview-frame {
+  width: 100%;
+  min-height: 280px;
+  border: none;
+  display: block;
+}
+
+.winner-emails-plaintext pre {
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  opacity: 0.85;
+  margin: 0.5rem 0 0;
+}
+
+.winner-emails-send-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 .timeline-shell {
   max-width: 58rem;
   margin: 0 auto;
